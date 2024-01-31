@@ -1,16 +1,25 @@
-# 这是一个示例 Python 脚本。
-
-# 按 Shift+F10 执行或将其替换为您的代码。
-# 按 双击 Shift 在所有地方搜索类、文件、工具窗口、操作和设置。
+from tkinter import *
+from tkinter.ttk import *
 
 
-def print_hi(name):
-    # 在下面的代码行中使用断点来调试脚本。
-    print(f'Hi, {name}')  # 按 Ctrl+F8 切换断点。
+class MainWindow(Tk):
+    def __init__(self):
+        super().__init__()
+
+        self.title_text = None
+        self.sub_title_text = None
+
+        self.title("CCDown")
+        self.setup_ui()
+
+    def setup_ui(self):
+        self.title_text = Label(self, text="CCDown", font=("Microsoft YaHei UI", 30))
+        self.title_text.pack()
+
+        self.sub_title_text = Label(self, text="为下载完整学而思编程 Python 作品而生", font=("Microsoft YaHei UI", 15))
+        self.sub_title_text.pack()
 
 
-# 按装订区域中的绿色按钮以运行脚本。
-if __name__ == '__main__':
-    print_hi('PyCharm')
-
-# 访问 https://www.jetbrains.com/help/pycharm/ 获取 PyCharm 帮助
+if __name__ == "__main__":
+    root = MainWindow()
+    root.mainloop()
