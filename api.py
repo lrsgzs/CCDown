@@ -10,7 +10,6 @@ class ProjectAPI(object):
                  header: Any[dict, None] = None
                  ) -> None:
         """ init function """
-        self.cookie = cookie
         if header is None:
             self.header = {
                 'Cookie': cookie,
@@ -27,9 +26,8 @@ class ProjectAPI(object):
         :return: dict, like it: {"name": ..., "main.py": ..., "files": [{"filename": ..., "url": ...], ...}
         """
         session = Session()
-        session.cookies.set_cookie(self.cookie)
 
-        res = session.get(f"https://code.xueersi.com/api/compilers/v2/{get_uid_from_url(url)}")
+        res = session.get(f"https://code.xueersi.com/api/compilers/v2/{get_uid_from_url(url)}", headers=self.header)
         res = json.loads(res.text)
 
         if not res.get("status_code") is None:
