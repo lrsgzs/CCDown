@@ -1,8 +1,9 @@
 import _thread
 import webview
+import time
 
 _cookie = ''
-win = None
+win = webview.create_window("登录-学而思", "https://login.xueersi.com")
 
 
 def _while_wait_to_get_cookie():
@@ -16,6 +17,8 @@ def _while_wait_to_get_cookie():
             break
         else:
             if ('online.xueersi.com' in url) or ('www.xueersi.com' in url) or ('code.xueersi.com' in url):
+                win.load_url("https://code.xueersi.com")
+                time.sleep(2)
                 _cookie = win.evaluate_js('document.cookie')
                 win.destroy()
                 break

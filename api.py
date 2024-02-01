@@ -1,13 +1,13 @@
 from requests import Session
-from typing import Any
+from typing import Dict
 from utils import get_uid_from_url, get_tree_from_dict
 import json
 
 
 class ProjectAPI(object):
     def __init__(self,
-                 cookie: Any[bytes, str] = "",
-                 header: Any[dict, None] = None
+                 cookie: Dict[bytes, str] = "",
+                 header: Dict[dict, None] = None
                  ) -> None:
         """ init function """
         if header is None:
@@ -27,10 +27,13 @@ class ProjectAPI(object):
         """
         session = Session()
 
-        res = session.get(f"https://code.xueersi.com/api/compilers/v2/{get_uid_from_url(url)}", headers=self.header)
+        uid = get_uid_from_url(url)
+        res = session.get(f"https://code.xueersi.com/api/compilers/v2/{uid}", headers=self.header)
         res = json.loads(res.text)
 
-        if not res.get("status_code") is None:
+        print(str(self.header) + "\n" + str(uid) + " " + str(res))
+
+        if res.get("status") is None:
             return {"message": "操作失败，请检查cookie和作品链接"}
 
         data = {"name": res["data"]["name"], "main.py": res["data"]["xml"]}
