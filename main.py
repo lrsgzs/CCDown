@@ -1,6 +1,7 @@
 from tkinter import *
 from tkinter.ttk import *
 from xes_login import login_to_get_cookie
+from utils import get_cookie_by_sys_argv
 import _thread
 import pickle
 
@@ -24,21 +25,34 @@ class MainWindow(Tk):
         try:
             file = open("config.pickle", "rb")
         except FileNotFoundError:
-            file = open("config.pickle", "wb")
-            pickle.dump({"cookie": ""}, file)
+            self.config = {"cookie": ""}
+            self.save_config()
+        else:
             file.close()
+            with open("config.pickle", "rb") as file:
+                self.config = pickle.load(file)
+        self.config_widgets()
 
-        with open("config.pickle", "rb") as file:
-            self.config = pickle.load(file)
+    def save_config(self):
+        with open("config.pickle", "wb") as file:
+            pickle.dump(self.config, file)
 
+    def config_widgets(self):
+        self.cookie_input.config(state="normal")
         self.cookie_input.delete(0, END)
-        self.cookie_input.insert(0, self.config["cookie"])
+        self.cookie_input.insert(0, self.config['cookie'])
+        self.cookie_input.config(state="readonly")
 
     def signin_event(self):
-        cookie = login_to_get_cookie()
+        try:
+            cookie = get_cookie_by_sys_argv()
+        except IndexError:
+            cookie = login_to_get_cookie()
+
         if cookie:
-            self.cookie_input.delete(0, END)
-            self.cookie_input.insert(0, cookie)
+            self.config["cookie"] = cookie
+            self.save_config()
+            self.config_widgets()
 
     def setup_ui(self):
         normal_font = ("Microsoft YaHei UI", 10)
@@ -50,10 +64,10 @@ class MainWindow(Tk):
 
         self.cookie_frame = LabelFrame(self, text="cookie 配置")
 
-        self.cookie_input = Entry(self.cookie_frame, font=normal_font)
+        self.cookie_input = Entry(self.cookie_frame, font=normal_font, state="readonly")
         self.cookie_input.pack(side=LEFT, fill=X, expand=True)
 
-        self.get_cookie_with_auth = Button(self.cookie_frame, text="通过登录来获取 cookie",
+        self.get_cookie_with_auth = Button(self.cookie_frame, text="获取 cookie",
                                            command=self.signin_event)
         self.get_cookie_with_auth.pack(side=RIGHT)
 
