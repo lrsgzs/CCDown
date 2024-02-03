@@ -81,24 +81,33 @@ class MainWindow(Tk):
 
         cookie = self.config["cookie"]
         header = {
-            'Cookie': cookie,
             'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                           'Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.61'
         }
         uid = get_uid_from_url(self.url_input.get())
         self.logger.debug(f"作品ID为 {uid}，将要保存到 {save_to}")
 
-        api = ProjectAPI("", header=header)
+        api = ProjectAPI(cookie, header)
         data = api.get_project(uid)
+
+        self.logger.debug(data["message"])
+        if data.get("main.py") is None:
+            messagebox.showerror("失败", data["message"])
+            return
 
         self.logger.info("正在保存 /main.py")
         with open(save_to + "/main.py", "w", encoding="utf-8") as file:
             file.write(data["main.py"])
 
         for i in data["assets"]:
-            if not os.path.exists(save_to + i["saveto"]):
-                self.logger.info(f"正在创建 {i['saveto']} 文件夹")
-                os.mkdir(save_to + i["saveto"])
+            need_make_dirs = i["saveto"].split("/")
+            need_make_dirs.pop(0)
+            current_path = ""
+            for j in need_make_dirs:
+                current_path = current_path + "/" + j
+                if not os.path.exists(save_to + j):
+                    self.logger.info(f"正在创建 {current_path} 文件夹")
+                    os.mkdir(save_to + current_path)
 
             self.logger.info(f"正在下载 {i['path']}")
             with open(save_to + i["path"], "wb") as file:

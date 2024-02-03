@@ -8,12 +8,12 @@ class ProjectAPI(object):
         """ init function """
         if header is None:
             self.header = {
-                'Cookie': cookie,
                 'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
                               'Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.61'
             }
         else:
             self.header = header
+        self.header["cookie"] = cookie
 
     def get_project(self, uid: int) -> dict:
         """
@@ -29,7 +29,7 @@ class ProjectAPI(object):
         if res.get("status") is None:
             return {"message": "操作失败，请检查cookie和作品链接"}
 
-        data = {"name": res["data"]["name"], "main.py": res["data"]["xml"]}
+        data = {"message": "操作成功", "name": res["data"]["name"], "main.py": res["data"]["xml"]}
         if res["data"]["assets"].get("assets_url") is None:
             data["assets"] = []
             return data
