@@ -150,13 +150,6 @@ class MainWindow(Tk):
         self.submit.pack()
 
 
-def set_config():
-    cookie = input("cookie> ")
-    with open("config.pickle", "wb") as file:
-        pickle.dump({"cookie": cookie}, file)
-
-
 if __name__ == "__main__":
-    # set_config()
     root = MainWindow()
     root.mainloop()
