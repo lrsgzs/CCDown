@@ -1,14 +1,17 @@
 from tkinter import *
 from tkinter.ttk import *
+from tkinter import messagebox
 from tkinter import filedialog
 
-from utils import get_cookie_by_sys_argv
-from xes_login import login_to_get_cookie
+from utils import get_cookie_by_sys_argv, get_uid_from_url
 from api import ProjectAPI
+from xes_login import login_to_get_cookie
 from logger import Logger
 
 import _thread
 import pickle
+import requests
+import os
 
 
 class MainWindow(Tk):
@@ -70,14 +73,40 @@ class MainWindow(Tk):
             self.config_widgets()
 
     def save_project(self):
-        save_to = filedialog.askdirectory(parent=self, title="在何处保存作品？")
+        save_to = filedialog.askdirectory(title="在何处保存作品？")
+        if not save_to:
+            self.logger.error("未选择保存位置")
+            messagebox.showerror(title="错误", message="未选择保存位置")
+            return
+
         cookie = self.config["cookie"]
-        url = self.url_input.get()
+        header = {
+            'Cookie': cookie,
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
+                          'Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.61'
+        }
+        uid = get_uid_from_url(self.url_input.get())
+        self.logger.debug(f"作品ID为 {uid}，将要保存到 {save_to}")
 
-        api = ProjectAPI(cookie)
-        data = api.get_project(url)
+        api = ProjectAPI("", header=header)
+        data = api.get_project(uid)
 
-        self.logger.debug(data)
+        self.logger.info("正在保存 /main.py")
+        with open(save_to + "/main.py", "w", encoding="utf-8") as file:
+            file.write(data["main.py"])
+
+        for i in data["assets"]:
+            if not os.path.exists(save_to + i["saveto"]):
+                self.logger.info(f"正在创建 {i['saveto']} 文件夹")
+                os.mkdir(save_to + i["saveto"])
+
+            self.logger.info(f"正在下载 {i['path']}")
+            with open(save_to + i["path"], "wb") as file:
+                res = requests.get(i["url"], headers=header)
+                file.write(res.content)
+
+        self.logger.info("下载完毕")
+        messagebox.showinfo(title="成功", message="下载完成")
 
     def setup_ui(self):
         normal_font = ("Microsoft YaHei UI", 10)
@@ -112,6 +141,13 @@ class MainWindow(Tk):
         self.submit.pack()
 
 
+def set_config():
+    cookie = input("cookie> ")
+    with open("config.pickle", "wb") as file:
+        pickle.dump({"cookie": cookie}, file)
+
+
 if __name__ == "__main__":
+    # set_config()
     root = MainWindow()
     root.mainloop()
