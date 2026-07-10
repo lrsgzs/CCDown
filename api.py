@@ -1,6 +1,5 @@
-from requests import Session
+from aiohttp import ClientSession
 from utils import get_tree_from_dict
-import json
 
 
 class ProjectAPI(object):
@@ -15,17 +14,17 @@ class ProjectAPI(object):
         else:
             self.header = header.copy()
             self.header['Cookie'] = cookie
-        self.session = Session()
+        self.session = ClientSession()
 
-    def get_project(self, uid: int) -> dict:
+    async def get_project(self, uid: int) -> dict:
         """
         get project info
         :param uid: project id
         :return: dict, eg: {"name": ..., "main.py": ..., "assets": [{"saveto": ..., "path": ..., "url": ...], "metadata": {...}}
         """
         url = f"https://code.xueersi.com/api/compilers/v2/{uid}?id={uid}"
-        res = self.session.get(url, headers=self.header)
-        res = json.loads(res.text)
+        async with self.session.get(url, headers=self.header) as response:
+            res = await response.json()
 
         if res.get("status") is None:
             return {"message": "操作失败，请检查cookie和作品链接"}
@@ -34,11 +33,14 @@ class ProjectAPI(object):
         if res["data"]["assets"].get("assets_url") is None:
             data["assets"] = []
         else:
-            origin_assets = self.session.get(res["data"]["assets"]["assets_url"], headers=self.header)
-            origin_assets = json.loads(origin_assets.text)["treeAssets"]
+            async with self.session.get(res["data"]["assets"]["assets_url"], headers=self.header) as response:
+                origin_assets = (await response.json())["treeAssets"]
             assets = []
             get_tree_from_dict(origin_assets, "", assets)
     
             data["assets"] = assets
         data["message"] = "操作成功"
         return data
+
+    async def dispose(self):
+        await self.session.close()

@@ -1,15 +1,14 @@
-import _thread
 from PySide6.QtCore import *
-from PySide6.QtGui import *
 from PySide6.QtNetwork import *
 from PySide6.QtWidgets import *
 from PySide6.QtWebEngineCore import *
 from PySide6.QtWebEngineWidgets import *
+from qasync import asyncSlot
 
 from http.cookies import SimpleCookie
 from typing import Any
+import asyncio
 import sys
-import time
 
 def create_cookie(input_: dict[Any, Any] | str) -> SimpleCookie:
     if isinstance(input_, dict):
@@ -36,6 +35,7 @@ class LoginDialog(QDialog):
     def __init__(self, parent: QWidget | None = None) -> None:
         super().__init__(parent)
         self.cookies: dict[str, str] = {}
+        self.logged = False
 
         self.profile = QWebEngineProfile()
         cookie_store = self.profile.cookieStore()
@@ -63,10 +63,16 @@ class LoginDialog(QDialog):
         if cookie.name().toStdString() in self.cookies:
             del self.cookies[cookie.name().toStdString()]
 
-    def on_url_changed(self, url: QUrl):
+    @asyncSlot()
+    async def on_url_changed(self, url: QUrl):
+        if self.logged: return
+
         target = url.toString()
         for choice in ['online.xueersi.com', 'www.xueersi.com', 'code.xueersi.com']:
             if choice in target:
+                self.logged = True
+                self.load_url("https://code.xueersi.com")
+                await asyncio.sleep(5)
                 self.accept()
 
     def load_url(self, url: str) -> None:
@@ -96,8 +102,3 @@ def login_to_get_cookie(parent: QWidget | None = None):
         cookie_str += f"{key}={value};"
 
     return cookie_str
-
-
-if __name__ == '__main__':
-    app = QApplication(sys.argv)
-    print(login_to_get_cookie())

@@ -1,19 +1,19 @@
-from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
-from qasync import QEventLoop
+from qasync import QEventLoop, asyncSlot, asyncClose
+
+import asyncio
+from aiohttp import ClientSession
+import aiofiles
 
 from utils import get_uid_from_url
 from api import ProjectAPI
 from logger import Logger
 import xes_login
 
-import asyncio
 import json
-import requests
 import os
 import sys
-
 
 HEADER = {
     'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
@@ -25,6 +25,7 @@ class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.config = {}
+        self.session: ClientSession | None = None
         self.logger = Logger("CCDown")
 
         self.setWindowTitle("CCDown")
@@ -32,6 +33,11 @@ class MainWindow(QMainWindow):
         self.setup_ui()
         self.load_config()
         self.logger.info("准备就绪")
+
+    async def init_async(self):
+        header = HEADER.copy()
+        header["Cookie"] = self.config["cookie"]
+        self.session = ClientSession(headers=header)
 
     def setup_ui(self):
         self.logger.info("正在配置 UI")
@@ -104,6 +110,12 @@ class MainWindow(QMainWindow):
         self.cookie_input.clear()
         self.cookie_input.setText(self.config['cookie'])
 
+    @asyncClose
+    async def closeEvent(self, event):
+        if self.session and not self.session.closed:
+            await self.session.close()
+        event.accept()
+
     def load_config(self):
         try:
             file = open("config.json", "r", encoding="utf-8")
@@ -134,11 +146,11 @@ class MainWindow(QMainWindow):
             self.logger.info("获取 cookie 成功")
             QMessageBox.information(self, "成功", "成功获取 cookie，请重启程序")
             self.close()
-            app.exit()
         else:
             QMessageBox.critical(self, "错误", "你没有在弹出的窗口登录")
 
-    def save_project(self):
+    @asyncSlot()
+    async def save_project(self):
         if not self.url_input.text():
             QMessageBox.critical(self, "错误", "未输入作品链接")
             return
@@ -153,18 +165,43 @@ class MainWindow(QMainWindow):
         cookie = self.config["cookie"]
 
         api = ProjectAPI(cookie)
-        data = api.get_project(uid)
+        data = await api.get_project(uid)
+        await api.dispose()
 
         self.current_project_label.setText(f"当前项目(1/1)：{data["metadata"]["name"]}")
-        self._save_project(save_to, data)
+        await self._save_project(save_to, data)
 
         self.logger.info("下载完毕")
         QMessageBox.information(self, "成功", "下载完成")
 
-    def save_all_project(self):
-        pass
+    @asyncSlot()
+    async def save_all_project(self):
+        save_to = QFileDialog.getExistingDirectory(self, "在何处保存作品？")
+        if not save_to:
+            self.logger.error("未选择保存位置")
+            QMessageBox.critical(self, "错误", "未选择保存位置")
+            return
 
-    def _save_project(self, save_to: str, data: dict):
+        projects = await self._fetch_projects_list()
+        total = len(projects)
+        cookie = self.config["cookie"]
+        api = ProjectAPI(cookie)
+
+        self.current_project_label.setText(f"当前项目(0/{total})：无")
+
+        for i, uid in enumerate(projects):
+            data = await api.get_project(uid)
+            self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data["metadata"]["name"]}")
+            await self._save_project(save_to, data)
+
+        await api.dispose()
+        self.logger.info(f"下载完毕，共{total}个项目")
+        QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
+
+    async def _save_project(self, save_to: str, data: dict):
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+
         metadata = data["metadata"]
         uid: int = metadata["id"]
 
@@ -181,14 +218,14 @@ class MainWindow(QMainWindow):
         else:
             self.logger.debug(data["message"])
 
-        save_to = f"{save_to}/{metadata["lang"]}-{uid} {metadata["name"]}"
-        self.logger.info(f"将要保存到 {save_to}")
+        save_to = f"{save_to}/{metadata["lang"]}-{uid}"
+        self.logger.info(f"name='{metadata["name"]}'，将要保存到 {save_to}")
         if not os.path.exists(save_to):
             os.mkdir(save_to)
 
         self.logger.info("正在保存 /metadata.json")
-        with open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
-            json.dump(metadata, file, ensure_ascii=False, indent=4)
+        async with aiofiles.open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
+            await file.write(json.dumps(metadata, ensure_ascii=False, indent=4))
 
         thumbnail_url = metadata["thumbnail"]
         if thumbnail_url:
@@ -196,18 +233,18 @@ class MainWindow(QMainWindow):
             thumbnail_filename = f"thumbnail.{thumbnail_ext}"
 
             self.logger.info(f"正在下载 /{thumbnail_filename}")
-            with open(save_to + "/" + thumbnail_filename, "wb") as file:
-                res = requests.get(thumbnail_url, headers=HEADER)
-                file.write(res.content)
+            async with self.session.get(thumbnail_url) as response:
+                async with aiofiles.open(save_to + "/" + thumbnail_filename, "wb") as file:
+                    await file.write(await response.content.read())
 
         if metadata["lang"] == "cpp":
             self.logger.info("正在保存 /main.cpp")
-            with open(save_to + "/main.cpp", "w", encoding="utf-8") as file:
-                file.write(data["main.py"])
+            async with aiofiles.open(save_to + "/main.cpp", "w", encoding="utf-8") as file:
+                await file.write(data["main.py"])
         else:
             self.logger.info("正在保存 /main.py")
-            with open(save_to + "/main.py", "w", encoding="utf-8") as file:
-                file.write(data["main.py"])
+            async with aiofiles.open(save_to + "/main.py", "w", encoding="utf-8") as file:
+                await file.write(data["main.py"])
 
         for i in data["assets"]:
             need_make_dirs = i["saveto"].split("/")
@@ -220,9 +257,49 @@ class MainWindow(QMainWindow):
                     os.mkdir(save_to + current_path)
 
             self.logger.info(f"正在下载 {i['path']}")
-            with open(save_to + i["path"], "wb") as file:
-                res = requests.get(i["url"], headers=HEADER)
-                file.write(res.content)
+            async with self.session.get(i["url"]) as response:
+                async with aiofiles.open(save_to + i["path"], "wb") as file:
+                    await file.write(await response.content.read())
+
+    async def _fetch_projects_list(self):
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+
+        projects_list: list[int] = []
+
+        # python part
+        # default params: ?published=all&type=normal&page=1&per_page=20
+        async with self.session.get("https://code.xueersi.com/api/python/my?page=1") as response:
+            data = await response.json()
+            if data.get("data") is None:
+                self.logger.error(data)
+                return []
+
+            py_first_page = data["data"]
+            for project in py_first_page["data"]:
+                projects_list.append(project["id"])
+
+        py_total_pages = py_first_page["last_page"]
+        for i in range(2, py_total_pages + 1):
+            async with self.session.get(f"https://code.xueersi.com/api/python/my?page={i}") as response:
+                page = (await response.json())["data"]
+                for project in page:
+                    projects_list.append(project["id"])
+
+        # cpp part
+        async with self.session.get("https://code.xueersi.com/api/compilers/my?page=1") as response:
+            cpp_first_page = (await response.json())["data"]
+            for project in cpp_first_page["data"]:
+                projects_list.append(project["id"])
+
+        cpp_total_pages = cpp_first_page["last_page"]
+        for i in range(2, cpp_total_pages + 1):
+            async with self.session.get(f"https://code.xueersi.com/api/compilers/my?page={i}") as response:
+                page = (await response.json())["data"]
+                for project in page:
+                    projects_list.append(project["id"])
+
+        return projects_list
 
 
 if __name__ == "__main__":
@@ -232,6 +309,7 @@ if __name__ == "__main__":
 
     main_window = MainWindow()
     main_window.show()
+    loop.create_task(main_window.init_async())
 
     app.aboutToQuit.connect(lambda: loop.stop())
     try:

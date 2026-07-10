@@ -1,7 +1,3 @@
-import sys
-import json
-
-
 def get_dict_from_url_params(text: str) -> dict:
     param = text.split("&")
     params = {}
@@ -30,9 +26,3 @@ def get_tree_from_dict(origin_assets: dict, current_path: str, assets: list):
         else:
             file_url = f"https://static0.xesimg.com/programme/python_assets/{i['md5ext']}"
             assets.append({"saveto": current_path, "path": filepath, "url": file_url})
-
-
-def get_cookie_by_sys_argv():
-    data = sys.argv[1]
-    data = json.loads(data)
-    return data["cookies"]
