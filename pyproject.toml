@@ -3,11 +3,10 @@ name = "ccdown"
 version = "0.1.0"
 requires-python = ">=3.14"
 dependencies = [
-    "aiofiles>=25.1.0",
-    "aiohttp>=3.14.1",
-    "pyside6>=6.11.1",
-    "qasync>=0.28.0",
-    "requests>=2.34.2",
+    "aiofiles~=25.1.0",
+    "aiohttp~=3.14.1",
+    "pyside6~=6.11.1",
+    "qasync~=0.28.0",
 ]
 
 [[tool.uv.index]]
