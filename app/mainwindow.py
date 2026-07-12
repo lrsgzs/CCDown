@@ -305,18 +305,18 @@ class MainWindow(QMainWindow):
         metadata = data["metadata"]
         uid: int = metadata["id"]
 
-        self.logger.debug(f"作品ID为 {uid}")
+        self.logger.info(f"作品ID为 {uid}")
         if uid == 0:
             self.logger.error("错误的作品")
             QMessageBox.critical(self, "错误", "错误的作品")
             raise RuntimeError("错误的作品")
 
         save_to = f"{save_to}/{metadata['lang']}-{uid}"
-        self.logger.info(f"name='{metadata['name']}'，将要保存到 {save_to}")
+        self.logger.debug(f"name='{metadata['name']}'，将要保存到 {save_to}")
         if not os.path.exists(save_to):
             os.mkdir(save_to)
 
-        self.logger.info("正在保存 /metadata.json")
+        self.logger.debug("正在保存 /metadata.json")
         async with aiofiles.open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
             await file.write(json.dumps(metadata, ensure_ascii=False, indent=4))
 
@@ -325,13 +325,13 @@ class MainWindow(QMainWindow):
             thumbnail_ext = thumbnail_url.split(".")[-1].lower()
             thumbnail_filename = f"thumbnail.{thumbnail_ext}"
 
-            self.logger.info(f"正在下载 /{thumbnail_filename}")
+            self.logger.debug(f"正在下载 /{thumbnail_filename}")
             async with self.session.get(thumbnail_url) as response:
                 async with aiofiles.open(save_to + "/" + thumbnail_filename, "wb") as file:
                     await file.write(await response.content.read())
 
         try:
-            self.logger.info("正在保存 /comments.json")
+            self.logger.debug("正在保存 /comments.json")
             comments = await self.comments_api.get_comments(metadata["topic_id"])
             async with aiofiles.open(save_to + "/comments.json", "w") as file:
                 await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
@@ -339,11 +339,11 @@ class MainWindow(QMainWindow):
             self.logger.warning(f"{uid} 评论下载失败")
 
         if metadata["lang"] == "cpp":
-            self.logger.info("正在保存 /main.cpp")
+            self.logger.debug("正在保存 /main.cpp")
             async with aiofiles.open(save_to + "/main.cpp", "w", encoding="utf-8") as file:
                 await file.write(data["code"])
         else:
-            self.logger.info("正在保存 /main.py")
+            self.logger.debug("正在保存 /main.py")
             async with aiofiles.open(save_to + "/main.py", "w", encoding="utf-8") as file:
                 await file.write(data["code"])
 
@@ -354,10 +354,10 @@ class MainWindow(QMainWindow):
             for j in need_make_dirs:
                 current_path = current_path + "/" + j
                 if not os.path.exists(save_to + current_path):
-                    self.logger.info(f"正在创建 {current_path} 文件夹")
+                    self.logger.debug(f"正在创建 {current_path} 文件夹")
                     os.mkdir(save_to + current_path)
 
-            self.logger.info(f"正在下载 {i['path']}")
+            self.logger.debug(f"正在下载 {i['path']}")
             async with self.session.get(i["url"]) as response:
                 async with aiofiles.open(save_to + i["path"], "wb") as file:
                     await file.write(await response.content.read())
