@@ -11,6 +11,7 @@ import aiofiles
 from utils import get_uid_from_url
 from api import ProjectAPI
 from logger import Logger
+from constants import USER_AGENT
 
 if USE_WEBVIEW:
     import xes_login
@@ -20,8 +21,7 @@ import os
 import sys
 
 HEADER = {
-    'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) '
-                  'Chrome/109.0.0.0 Safari/537.36 Edg/109.0.1518.61'
+    'user-agent': USER_AGENT
 }
 
 
