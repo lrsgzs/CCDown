@@ -333,7 +333,24 @@ class MainWindow(QMainWindow):
 
         self.logger.debug("正在保存 /metadata.json")
         async with aiofiles.open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
-            await file.write(json.dumps(metadata, ensure_ascii=False, indent=4))
+            content = metadata.copy()
+            del content["xml"]
+            await file.write(json.dumps(content, ensure_ascii=False, indent=4))
+
+        self.logger.debug("正在保存 /readme.md")
+        description = metadata["description"].replace("\n", "\n\n")
+        content = f"""# {metadata['name']}
+
+```yaml
+topic_id: {metadata['topic_id']}
+author: {metadata['username']}
+lang: {metadata['lang']}
+```
+
+{description}
+"""
+        async with aiofiles.open(save_to + "/readme.md", "w", encoding="utf-8") as file:
+            await file.write(content)
 
         thumbnail_url = metadata["thumbnail"]
         if thumbnail_url:
