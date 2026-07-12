@@ -16,14 +16,20 @@ class ProjectAPI(object):
             self.header['Cookie'] = cookie
         self.session = ClientSession(headers=self.header)
 
-    async def get_project(self, uid: int) -> ProjectInfo:
-        url_choices = [
-            f"https://code.xueersi.com/api/compilers/v2/{uid}?id={uid}",
-            f"https://code.xueersi.com/api/community/v4/projects/detail?id={uid}"
-        ]
+    async def get_compiler_project(self, pid: int) -> ProjectInfo:
+        return await self._get_project([
+            f"https://code.xueersi.com/api/compilers/v2/{pid}?id={pid}",
+            f"https://code.xueersi.com/api/community/v4/projects/detail?id={pid}"
+        ])
 
+    async def get_scratch_project(self, pid: int) -> ProjectInfo:
+        return await self._get_project([
+            f"https://code.xueersi.com/api/projects/v2/{pid}?id={pid}"
+        ])
+
+    async def _get_project(self, choices: list[str]) -> ProjectInfo:
         res = {}
-        for url in url_choices:
+        for url in choices:
             async with self.session.get(url) as response:
                 res = await response.json()
             if res.get("status"):
@@ -38,12 +44,17 @@ class ProjectAPI(object):
             "assets": [],
             "metadata": res["data"]
         }
+
+        if not res["data"].get("assets"):
+            return data
+
         if res["data"]["assets"].get("assets_url"):
             async with self.session.get(res["data"]["assets"]["assets_url"]) as response:
                 origin_assets = (await response.json())["treeAssets"]
             assets = []
             get_tree_from_dict(origin_assets, "", assets)
             data["assets"] = assets
+
         return data
 
     async def dispose(self):

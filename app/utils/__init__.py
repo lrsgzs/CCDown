@@ -20,6 +20,17 @@ def get_pid_from_url(url: str) -> int:
     else:
         return 0
 
+def get_topic_id_from_url(url: str) -> str:
+    if "code.xueersi.com/ide/code/" in url:
+        return "CP_" + url.split("code.xueersi.com/ide/code/")[1].split("?")[0]
+    elif "code.xueersi.com/home/project/detail" in url:
+        pid = get_dict_from_url_params(url.split("?")[1])["pid"]
+        if "scratch" in url:
+            return "CS_" + pid
+        return "CP_" + pid
+    else:
+        return "CP_0"
+
 
 def get_tree_from_dict(origin_assets: dict, current_path: str, assets: list[AssetInfo]):
     for i in origin_assets:

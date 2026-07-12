@@ -7,7 +7,7 @@ from aiohttp import ClientSession
 import aiofiles
 
 from app.api import ProjectAPI, CommentsAPI
-from app.utils import get_pid_from_url, Logger
+from app.utils import get_pid_from_url, Logger, get_topic_id_from_url
 from app.constants import USER_AGENT, USE_WEBVIEW
 from app.typings import ProjectInfo
 
@@ -149,7 +149,7 @@ class MainWindow(QMainWindow):
         lang_layout = QHBoxLayout()
         config_group_layout.addRow("筛选语言:", lang_layout)
         self.lang_scratch_checkbox = QCheckBox("Scratch")
-        self.lang_scratch_checkbox.setEnabled(False)
+        self.lang_scratch_checkbox.setChecked(True)
         lang_layout.addWidget(self.lang_scratch_checkbox)
         self.lang_python_checkbox = QCheckBox("Python")
         self.lang_python_checkbox.setChecked(True)
@@ -244,8 +244,8 @@ class MainWindow(QMainWindow):
             self.submit_button.setEnabled(True)
             return
 
-        pid = get_pid_from_url(link)
-        if pid == 0:
+        pid = get_topic_id_from_url(link)
+        if pid == "CP_0":
             self.logger.error("错误的作品链接:" + link)
             QMessageBox.critical(self, "错误", "错误的作品链接:\n" + link)
 
@@ -268,9 +268,9 @@ class MainWindow(QMainWindow):
             self.submit_multi_button.setEnabled(True)
             return
 
-        projects: list[int] = []
+        projects: list[str] = []
         for link in links:
-            pid = get_pid_from_url(link)
+            pid = get_topic_id_from_url(link)
             if pid == 0:
                 self.logger.error("错误的作品链接:" + link)
                 QMessageBox.critical(self, "错误", "错误的作品链接:\n" + link)
@@ -303,7 +303,7 @@ class MainWindow(QMainWindow):
     async def save_all_project(self):
         await self._save_projects(await self._fetch_my_projects_list())
 
-    async def _save_projects(self, projects: list[int]):
+    async def _save_projects(self, projects: list[str]):
         def _filter(project: ProjectInfo) -> bool:
             type_check = {
                 "normal": self.type_normal_checkbox.isChecked(),
@@ -332,14 +332,19 @@ class MainWindow(QMainWindow):
 
         projects_data: list[ProjectInfo] = []
         failed_projects: list[str] = []
-        for pid in projects:
+        for topic_id in projects:
             try:
-                data = await self.project_api.get_project(pid)
+                pid = int(topic_id.split("_")[1])
+                if topic_id.startswith("CS_"):
+                    data = await self.project_api.get_scratch_project(pid)
+                else:
+                    data = await self.project_api.get_compiler_project(pid)
+
                 if _filter(data):
                     projects_data.append(data)
             except:
-                failed_projects.append(str(pid))
-                self.logger.error(f"{pid} 初筛出现错误")
+                failed_projects.append(str(topic_id))
+                self.logger.error(f"{topic_id} 初筛出现错误")
                 self.logger.format_exc()
 
         total = len(projects_data)
@@ -347,7 +352,10 @@ class MainWindow(QMainWindow):
         for i, data in enumerate(projects_data):
             try:
                 self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data['metadata']['name']}")
-                await self._save_project(save_to, data)
+                if data["metadata"]["lang"] == "scratch":
+                    await self._save_scratch_project(save_to, data)
+                else:
+                    await self._save_project(save_to, data)
                 self.logger.info(f"{data['metadata']['topic_id']} 下载完毕")
             except:
                 failed_projects.append(data['metadata']['topic_id'])
@@ -363,12 +371,11 @@ class MainWindow(QMainWindow):
             self.logger.info(f"下载完毕，共{total}个项目")
             QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
 
-    async def _save_project(self, save_to: str, data: ProjectInfo):
+    async def _save_scratch_project(self, save_to: str, data: ProjectInfo):
+        # TODO: 和 _save_project 合并
+
         if not self.session:
             raise RuntimeError("Session not initialized")
-
-        if not self.comments_api:
-            raise RuntimeError("CommentsAPI not initialized")
 
         metadata = data["metadata"]
         uid: int = metadata["id"]
@@ -383,6 +390,77 @@ class MainWindow(QMainWindow):
         self.logger.debug(f"name='{metadata['name']}'，将要保存到 {save_to}")
         if not os.path.exists(save_to):
             os.mkdir(save_to)
+
+        await self.__save_project_basic(save_to, data)
+
+        self.logger.debug("正在保存 /project.json")
+        async with aiofiles.open(save_to + "/project.json", "w", encoding="utf-8") as file:
+            await file.write(data["code"])
+
+    async def _save_project(self, save_to: str, data: ProjectInfo):
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+
+        metadata = data["metadata"]
+        uid: int = metadata["id"]
+
+        self.logger.info(f"作品ID为 {uid}")
+        if uid == 0:
+            self.logger.error("错误的作品")
+            QMessageBox.critical(self, "错误", "错误的作品")
+            raise RuntimeError("错误的作品")
+
+        save_to = f"{save_to}/{metadata['lang']}-{uid}"
+        self.logger.debug(f"name='{metadata['name']}'，将要保存到 {save_to}")
+        if not os.path.exists(save_to):
+            os.mkdir(save_to)
+
+        await self.__save_project_basic(save_to, data)
+
+        if metadata["lang"] == "cpp":
+            self.logger.debug("正在保存 /main.cpp")
+            async with aiofiles.open(save_to + "/main.cpp", "w", encoding="utf-8") as file:
+                await file.write(data["code"])
+        else:
+            self.logger.debug("正在保存 /main.py")
+            async with aiofiles.open(save_to + "/main.py", "w", encoding="utf-8") as file:
+                await file.write(data["code"])
+
+        for i in data["assets"]:
+            need_make_dirs = i["saveto"].split("/")
+            need_make_dirs.pop(0)
+            current_path = ""
+            skip = False
+            for j in need_make_dirs:
+                current_path = current_path + "/" + j
+                if not os.path.exists(save_to + current_path):
+                    self.logger.debug(f"正在创建 {current_path} 文件夹")
+
+                    try:
+                        os.mkdir(save_to + current_path)
+                    except:
+                        self.logger.format_exc()
+                        skip = True
+                        break
+            if skip:
+                continue
+            try:
+                self.logger.debug(f"正在下载 {i['path']}")
+                async with self.session.get(i["url"]) as response:
+                    async with aiofiles.open(save_to + i["path"], "wb") as file:
+                        await file.write(await response.content.read())
+            except:
+                self.logger.format_exc()
+
+    async def __save_project_basic(self, save_to: str, data: ProjectInfo):
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+
+        if not self.comments_api:
+            raise RuntimeError("CommentsAPI not initialized")
+
+        metadata = data["metadata"]
+        topic_id: str = metadata["topic_id"]
 
         self.logger.debug("正在保存 /metadata.json")
         async with aiofiles.open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
@@ -421,48 +499,13 @@ lang: {metadata['lang']}
             async with aiofiles.open(save_to + "/comments.json", "w") as file:
                 await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
         except:
-            self.logger.warning(f"{uid} 评论下载失败")
+            self.logger.warning(f"{topic_id} 评论下载失败")
 
-        if metadata["lang"] == "cpp":
-            self.logger.debug("正在保存 /main.cpp")
-            async with aiofiles.open(save_to + "/main.cpp", "w", encoding="utf-8") as file:
-                await file.write(data["code"])
-        else:
-            self.logger.debug("正在保存 /main.py")
-            async with aiofiles.open(save_to + "/main.py", "w", encoding="utf-8") as file:
-                await file.write(data["code"])
-
-        for i in data["assets"]:
-            need_make_dirs = i["saveto"].split("/")
-            need_make_dirs.pop(0)
-            current_path = ""
-            skip = False
-            for j in need_make_dirs:
-                current_path = current_path + "/" + j
-                if not os.path.exists(save_to + current_path):
-                    self.logger.debug(f"正在创建 {current_path} 文件夹")
-
-                    try:
-                        os.mkdir(save_to + current_path)
-                    except:
-                        self.logger.format_exc()
-                        skip = True
-                        break
-            if skip:
-                continue
-            try:
-                self.logger.debug(f"正在下载 {i['path']}")
-                async with self.session.get(i["url"]) as response:
-                    async with aiofiles.open(save_to + i["path"], "wb") as file:
-                        await file.write(await response.content.read())
-            except:
-                self.logger.format_exc()
-
-    async def _fetch_projects_list(self, user: int) -> list[int]:
+    async def _fetch_projects_list(self, user: int) -> list[str]:
         if not self.session:
             raise RuntimeError("Session not initialized")
 
-        projects_list: list[int] = []
+        projects_list: list[str] = []
         async with self.session.get(
                 f"https://code.xueersi.com/api/space/works?user_id={user}&page=1&per_page=20&order_type=time") as response:
             data = await response.json()
@@ -473,9 +516,7 @@ lang: {metadata['lang']}
 
             first_page = data["data"]
             for project in first_page["data"]:
-                if project["lang"] == "scratch":
-                    continue
-                projects_list.append(project["id"])
+                projects_list.append(project["topic_id"])
 
         total: int = first_page["total"]
         total_pages = total // 20 + int(total % 20 > 0)
@@ -485,33 +526,33 @@ lang: {metadata['lang']}
             async with self.session.get(url) as response:
                 page = (await response.json())["data"]
                 for project in page["data"]:
-                    if project["lang"] == "scratch":
-                        continue
-                    projects_list.append(project["id"])
+                    projects_list.append(project["topic_id"])
 
         return projects_list
 
-    async def _fetch_my_projects_list(self) -> list[int]:
+    async def _fetch_my_projects_list(self) -> list[str]:
         if not self.session:
             raise RuntimeError("Session not initialized")
 
-        projects_list: list[int] = []
+        projects_list: list[str] = []
 
         if self.type_normal_checkbox.isChecked():
+            projects_list.extend(await self.__fetch_my_projects_part("projects", "normal"))
             projects_list.extend(await self.__fetch_my_projects_part("python", "normal"))
             projects_list.extend(await self.__fetch_my_projects_part("compilers", "normal"))
 
         if self.type_homework_checkbox.isChecked():
+            projects_list.extend(await self.__fetch_my_projects_part("projects", "normal"))
             projects_list.extend(await self.__fetch_my_projects_part("python", "homework"))
             projects_list.extend(await self.__fetch_my_projects_part("compilers", "homework"))
 
         return projects_list
 
-    async def __fetch_my_projects_part(self, project_type: str, type: str) -> list[int]:
+    async def __fetch_my_projects_part(self, project_type: str, type: str) -> list[str]:
         if not self.session:
             raise RuntimeError("Session not initialized")
 
-        projects_list: list[int] = []
+        projects_list: list[str] = []
 
         # default params: ?published=all&type=normal&page=1&per_page=20
         async with self.session.get(f"https://code.xueersi.com/api/{project_type}/my?type={type}&page=1") as response:
@@ -523,13 +564,13 @@ lang: {metadata['lang']}
 
             first_page = data["data"]
             for project in first_page["data"]:
-                projects_list.append(project["id"])
+                projects_list.append(project["topic_id"])
 
         total_pages = first_page["last_page"]
         for i in range(2, total_pages + 1):
             async with self.session.get(f"https://code.xueersi.com/api/{project_type}/my?type={type}&page={i}") as response:
                 page = (await response.json())["data"]
                 for project in page["data"]:
-                    projects_list.append(project["id"])
+                    projects_list.append(project["topic_id"])
 
         return projects_list
