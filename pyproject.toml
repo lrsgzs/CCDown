@@ -10,6 +10,7 @@ dependencies = [
     "aiohttp~=3.14.1",
     "pyside6~=6.11.1",
     "qasync~=0.28.0",
+    "sqlalchemy>=2.0.51",
 ]
 
 [[tool.uv.index]]

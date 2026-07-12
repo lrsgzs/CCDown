@@ -7,3 +7,5 @@ build/
 
 /data/
 /projects/
+/output.json
+/output.db
