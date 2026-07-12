@@ -168,13 +168,10 @@ class MainWindow(QMainWindow):
             return
 
         uid = get_uid_from_url(self.url_input.text())
-        cookie = self.config["cookie"]
+        api = ProjectAPI(self.config["cookie"])
 
         try:
-            api = ProjectAPI(cookie)
             data = await api.get_project(uid)
-            await api.dispose()
-
             self.current_project_label.setText(f"当前项目(1/1)：{data["metadata"]["name"]}")
             await self._save_project(save_to, data)
 
@@ -184,6 +181,8 @@ class MainWindow(QMainWindow):
             self.logger.error(f"{uid} 下载失败")
             self.logger.format_exc()
             QMessageBox.critical(self, "错误", f"{uid} 下载失败")
+        finally:
+            await api.dispose()
 
     @asyncSlot()
     async def save_all_project(self):
@@ -195,8 +194,7 @@ class MainWindow(QMainWindow):
 
         projects = await self._fetch_projects_list()
         total = len(projects)
-        cookie = self.config["cookie"]
-        api = ProjectAPI(cookie)
+        api = ProjectAPI(self.config["cookie"])
 
         failed_projects: list[int] = []
         self.current_project_label.setText(f"当前项目(0/{total})：无")

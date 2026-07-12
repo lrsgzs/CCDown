@@ -37,4 +37,4 @@ class Logger(QObject):
         self._log("DEBUG", message, "\033[2m")
     
     def format_exc(self) -> None:
-        self.error(traceback.format_exc())
+        self.error(traceback.format_exc().strip())

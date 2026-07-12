@@ -21,12 +21,21 @@ class ProjectAPI(object):
         :param uid: project id
         :return: dict, eg: {"name": ..., "main.py": ..., "assets": [{"saveto": ..., "path": ..., "url": ...], "metadata": {...}}
         """
-        url = f"https://code.xueersi.com/api/compilers/v2/{uid}?id={uid}"
-        async with self.session.get(url, headers=self.header) as response:
-            res = await response.json()
+
+        url_choices = [
+            f"https://code.xueersi.com/api/compilers/v2/{uid}?id={uid}",
+            f"https://code.xueersi.com/api/community/v4/projects/detail?id={uid}"
+        ]
+
+        res = {}
+        for url in url_choices:
+            async with self.session.get(url, headers=self.header) as response:
+                res = await response.json()
+            if res.get("status"):
+                break
 
         if res.get("status") is None:
-            return {"message": "操作失败，请检查cookie和作品链接"}
+            raise RuntimeError("作品不存在，请检查cookie和作品链接")
 
         data = {"name": res["data"]["name"], "main.py": res["data"]["xml"], "metadata": res["data"]}
         if res["data"]["assets"].get("assets_url") is None:
