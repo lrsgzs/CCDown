@@ -203,10 +203,13 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", "未输入作品链接")
             return
 
+        self.submit_button.setEnabled(False)
+
         save_to = QFileDialog.getExistingDirectory(self, "在何处保存作品？")
         if not save_to:
             self.logger.error("未选择保存位置")
             QMessageBox.critical(self, "错误", "未选择保存位置")
+            self.submit_button.setEnabled(True)
             return
 
         uid = get_pid_from_url(self.url_input.text())
@@ -222,16 +225,21 @@ class MainWindow(QMainWindow):
             self.logger.format_exc()
             QMessageBox.critical(self, "错误", f"{uid} 下载失败")
 
+        self.submit_button.setEnabled(True)
+
     @asyncSlot()
     async def save_multi_projects(self):
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
+
+        self.submit_multi_button.setEnabled(False)
 
         text = QInputDialog.getMultiLineText(self, "提示", "请输入作品链接，一行一个")[0]
         links = text.strip().splitlines()
 
         if len(links) == 0:
             QMessageBox.critical(self, "错误", "未输入作品链接")
+            self.submit_multi_button.setEnabled(True)
             return
 
         projects: list[int] = []
@@ -245,18 +253,25 @@ class MainWindow(QMainWindow):
 
         await self._save_projects(projects)
 
+        self.submit_multi_button.setEnabled(True)
+
     @asyncSlot()
     async def save_user_projects(self):
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
 
+        self.submit_user_button.setEnabled(False)
+
         link = self.user_input.text()
         if not link:
             QMessageBox.critical(self, "错误", "未输入作者空间链接")
+            self.submit_user_button.setEnabled(True)
             return
 
         uid = int(link.split("code.xueersi.com/space/")[1].split("?")[0])
         await self._save_projects(await self._fetch_projects_list(uid))
+
+        self.submit_user_button.setEnabled(True)
 
     @asyncSlot()
     async def save_all_project(self):
@@ -351,16 +366,27 @@ class MainWindow(QMainWindow):
             need_make_dirs = i["saveto"].split("/")
             need_make_dirs.pop(0)
             current_path = ""
+            skip = False
             for j in need_make_dirs:
                 current_path = current_path + "/" + j
                 if not os.path.exists(save_to + current_path):
                     self.logger.debug(f"正在创建 {current_path} 文件夹")
-                    os.mkdir(save_to + current_path)
 
-            self.logger.debug(f"正在下载 {i['path']}")
-            async with self.session.get(i["url"]) as response:
-                async with aiofiles.open(save_to + i["path"], "wb") as file:
-                    await file.write(await response.content.read())
+                    try:
+                        os.mkdir(save_to + current_path)
+                    except:
+                        self.logger.format_exc()
+                        skip = True
+                        break
+            if skip:
+                continue
+            try:
+                self.logger.debug(f"正在下载 {i['path']}")
+                async with self.session.get(i["url"]) as response:
+                    async with aiofiles.open(save_to + i["path"], "wb") as file:
+                        await file.write(await response.content.read())
+            except:
+                self.logger.format_exc()
 
     async def _fetch_projects_list(self, user: int) -> list[int]:
         if not self.session:
