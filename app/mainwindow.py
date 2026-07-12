@@ -270,10 +270,13 @@ class MainWindow(QMainWindow):
                 async with aiofiles.open(save_to + "/" + thumbnail_filename, "wb") as file:
                     await file.write(await response.content.read())
 
-        self.logger.info("正在保存 /comments.json")
-        comments = await self.comments_api.get_comments(metadata["topic_id"])
-        async with aiofiles.open(save_to + "/comments.json", "w") as file:
-            await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
+        try:
+            self.logger.info("正在保存 /comments.json")
+            comments = await self.comments_api.get_comments(metadata["topic_id"])
+            async with aiofiles.open(save_to + "/comments.json", "w") as file:
+                await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
+        except:
+            self.logger.warning(f"{uid} 评论下载失败")
 
         if metadata["lang"] == "cpp":
             self.logger.info("正在保存 /main.cpp")
