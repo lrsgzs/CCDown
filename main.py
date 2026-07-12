@@ -1,3 +1,5 @@
+USE_WEBVIEW = True
+
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 from qasync import QEventLoop, asyncSlot, asyncClose
@@ -9,7 +11,9 @@ import aiofiles
 from utils import get_uid_from_url
 from api import ProjectAPI
 from logger import Logger
-import xes_login
+
+if USE_WEBVIEW:
+    import xes_login
 
 import json
 import os
@@ -136,18 +140,31 @@ class MainWindow(QMainWindow):
             json.dump(self.config, file)
 
     def login(self):
-        self.logger.info("采用 webview2 登录")
-        QMessageBox.information(self, "提示", "请在即将弹出的窗口进行登录")
-        cookie = xes_login.login_to_get_cookie(self)
+        if USE_WEBVIEW:
+            self.logger.info("采用 webview2 登录")
+            QMessageBox.information(self, "提示", "请在即将弹出的窗口进行登录")
+            cookie = xes_login.login_to_get_cookie(self)
 
-        if cookie:
-            self.config["cookie"] = cookie
-            self.save_config()
-            self.logger.info("获取 cookie 成功")
-            QMessageBox.information(self, "成功", "成功获取 cookie，请重启程序")
-            self.close()
+            if cookie:
+                self.config["cookie"] = cookie
+                self.save_config()
+                self.logger.info("获取 cookie 成功")
+                QMessageBox.information(self, "成功", "成功获取 cookie，请重启程序")
+                self.close()
+            else:
+                QMessageBox.critical(self, "错误", "你没有在弹出的窗口登录")
         else:
-            QMessageBox.critical(self, "错误", "你没有在弹出的窗口登录")
+            self.logger.info("手动输入 cookie")
+            cookie = QInputDialog.getText(self, "提示", "请输入 cookie")[0]
+
+            if cookie:
+                self.config["cookie"] = cookie
+                self.save_config()
+                self.logger.info("输入 cookie 成功")
+                QMessageBox.information(self, "成功", "成功保存 cookie，请重启程序")
+                self.close()
+            else:
+                QMessageBox.critical(self, "错误", "你未输入 cookie")
 
     @asyncSlot()
     async def save_project(self):
@@ -213,7 +230,7 @@ class MainWindow(QMainWindow):
             self.logger.info(failed_projects)
             QMessageBox.warning(self, "警告",
                                     f"下载完毕，成功{total - count}个项目，失败{count}个项目\n{failed_projects}")
-        else
+        else:
             self.logger.info(f"下载完毕，共{total}个项目")
             QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
 
