@@ -1,3 +1,4 @@
+from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 from qasync import asyncSlot, asyncClose
@@ -5,9 +6,10 @@ from qasync import asyncSlot, asyncClose
 from aiohttp import ClientSession
 import aiofiles
 
-from app.api import ProjectAPI
+from app.api import ProjectAPI, CommentsAPI
 from app.utils import get_uid_from_url, Logger
-from constants import USER_AGENT, USE_WEBVIEW
+from app.constants import USER_AGENT, USE_WEBVIEW
+from app.typings import ProjectInfo
 
 if USE_WEBVIEW:
     from app.login.webview import login_by_webview
@@ -29,18 +31,24 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.config = {}
         self.session: ClientSession | None = None
+        self.project_api: ProjectAPI | None = None
+        self.comments_api: CommentsAPI | None = None
         self.logger = Logger("CCDown")
 
         self.setWindowTitle("CCDown")
 
         self.setup_ui()
         self.load_config()
+
         self.logger.info("准备就绪")
 
     async def init_async(self):
         header = HEADER.copy()
         header["Cookie"] = self.config["cookie"]
         self.session = ClientSession(headers=header)
+
+        self.project_api = ProjectAPI(self.config["cookie"])
+        self.comments_api = CommentsAPI(self.config["cookie"])
 
     def setup_ui(self):
         self.logger.info("正在配置 UI")
@@ -117,6 +125,13 @@ class MainWindow(QMainWindow):
     async def closeEvent(self, event):
         if self.session and not self.session.closed:
             await self.session.close()
+
+        if self.project_api:
+            await self.project_api.dispose()
+
+        if self.comments_api:
+            await self.comments_api.dispose()
+
         event.accept()
 
     def load_config(self):
@@ -151,12 +166,15 @@ class MainWindow(QMainWindow):
             self.save_config()
             self.logger.info("获取 cookie 成功")
             QMessageBox.information(self, "成功", "成功获取 cookie，请重启程序")
-            self.close()
+            QTimer.singleShot(100, self.close)
         else:
             QMessageBox.critical(self, "错误", "你没有在弹出的窗口登录")
 
     @asyncSlot()
     async def save_project(self):
+        if not self.project_api:
+            raise RuntimeError("ProjectAPI not initialized")
+
         if not self.url_input.text():
             QMessageBox.critical(self, "错误", "未输入作品链接")
             return
@@ -168,10 +186,8 @@ class MainWindow(QMainWindow):
             return
 
         uid = get_uid_from_url(self.url_input.text())
-        api = ProjectAPI(self.config["cookie"])
-
         try:
-            data = await api.get_project(uid)
+            data = await self.project_api.get_project(uid)
             self.current_project_label.setText(f"当前项目(1/1)：{data["metadata"]["name"]}")
             await self._save_project(save_to, data)
 
@@ -181,11 +197,12 @@ class MainWindow(QMainWindow):
             self.logger.error(f"{uid} 下载失败")
             self.logger.format_exc()
             QMessageBox.critical(self, "错误", f"{uid} 下载失败")
-        finally:
-            await api.dispose()
 
     @asyncSlot()
     async def save_all_project(self):
+        if not self.project_api:
+            raise RuntimeError("ProjectAPI not initialized")
+
         save_to = QFileDialog.getExistingDirectory(self, "在何处保存作品？")
         if not save_to:
             self.logger.error("未选择保存位置")
@@ -194,13 +211,12 @@ class MainWindow(QMainWindow):
 
         projects = await self._fetch_projects_list()
         total = len(projects)
-        api = ProjectAPI(self.config["cookie"])
 
         failed_projects: list[int] = []
         self.current_project_label.setText(f"当前项目(0/{total})：无")
         for i, uid in enumerate(projects):
             try:
-                data = await api.get_project(uid)
+                data = await self.project_api.get_project(uid)
                 self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data["metadata"]["name"]}")
                 await self._save_project(save_to, data)
                 self.logger.info(f"{uid} 下载完毕")
@@ -209,8 +225,6 @@ class MainWindow(QMainWindow):
                 self.logger.error(f"{uid} 下载失败")
                 self.logger.format_exc()
                 QMessageBox.critical(self, "错误", f"{uid} 下载失败")
-
-        await api.dispose()
 
         if count := len(failed_projects) > 0:
             self.logger.info(f"下载中出现错误，成功{total - count}个项目，失败{count}个项目：")
@@ -221,9 +235,12 @@ class MainWindow(QMainWindow):
             self.logger.info(f"下载完毕，共{total}个项目")
             QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
 
-    async def _save_project(self, save_to: str, data: dict):
+    async def _save_project(self, save_to: str, data: ProjectInfo):
         if not self.session:
             raise RuntimeError("Session not initialized")
+
+        if not self.comments_api:
+            raise RuntimeError("CommentsAPI not initialized")
 
         metadata = data["metadata"]
         uid: int = metadata["id"]
@@ -233,13 +250,6 @@ class MainWindow(QMainWindow):
             self.logger.error("错误的作品链接")
             QMessageBox.critical(self, "错误", "错误的作品链接")
             return
-
-        if data.get("main.py") is None:
-            self.logger.error(data["message"])
-            QMessageBox.critical(self, "错误", data["message"])
-            return
-        else:
-            self.logger.debug(data["message"])
 
         save_to = f"{save_to}/{metadata["lang"]}-{uid}"
         self.logger.info(f"name='{metadata["name"]}'，将要保存到 {save_to}")
@@ -260,14 +270,19 @@ class MainWindow(QMainWindow):
                 async with aiofiles.open(save_to + "/" + thumbnail_filename, "wb") as file:
                     await file.write(await response.content.read())
 
+        self.logger.info("正在保存 /comments.json")
+        comments = await self.comments_api.get_comments(metadata["topic_id"])
+        async with aiofiles.open(save_to + "/comments.json", "w") as file:
+            await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
+
         if metadata["lang"] == "cpp":
             self.logger.info("正在保存 /main.cpp")
             async with aiofiles.open(save_to + "/main.cpp", "w", encoding="utf-8") as file:
-                await file.write(data["main.py"])
+                await file.write(data["code"])
         else:
             self.logger.info("正在保存 /main.py")
             async with aiofiles.open(save_to + "/main.py", "w", encoding="utf-8") as file:
-                await file.write(data["main.py"])
+                await file.write(data["code"])
 
         for i in data["assets"]:
             need_make_dirs = i["saveto"].split("/")
@@ -306,7 +321,7 @@ class MainWindow(QMainWindow):
         for i in range(2, py_total_pages + 1):
             async with self.session.get(f"https://code.xueersi.com/api/python/my?page={i}") as response:
                 page = (await response.json())["data"]
-                for project in page:
+                for project in page["data"]:
                     projects_list.append(project["id"])
 
         # cpp part
@@ -319,7 +334,7 @@ class MainWindow(QMainWindow):
         for i in range(2, cpp_total_pages + 1):
             async with self.session.get(f"https://code.xueersi.com/api/compilers/my?page={i}") as response:
                 page = (await response.json())["data"]
-                for project in page:
+                for project in page["data"]:
                     projects_list.append(project["id"])
 
         return projects_list

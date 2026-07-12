@@ -41,13 +41,13 @@ class LoginDialog(QDialog):
         self.cookies: dict[str, str] = {}
         self.logged = False
 
-        self.profile = QWebEngineProfile()
+        self.profile = QWebEngineProfile(self)
         self.profile.setHttpUserAgent(USER_AGENT)
         cookie_store = self.profile.cookieStore()
         cookie_store.cookieAdded.connect(self.on_cookie_added)
         cookie_store.cookieRemoved.connect(self.on_cookie_removed)
 
-        self.webview = QWebEngineView()
+        self.webview = QWebEngineView(self)
         self.page = QWebEnginePage(self.profile, self.webview)
         self.webview.setPage(self.page)
         self.webview.urlChanged.connect(self.on_url_changed)
@@ -78,7 +78,9 @@ class LoginDialog(QDialog):
                 self.logged = True
                 self.load_url("https://code.xueersi.com")
                 await asyncio.sleep(3)
+                self.webview.stop()
                 self.accept()
+                break
 
     def load_url(self, url: str) -> None:
         self.webview.setUrl(QUrl(url))
@@ -90,11 +92,13 @@ class LoginDialog(QDialog):
         return self.cookies
 
     def closeEvent(self, arg__1):
+        self.webview.stop()
         self.reject()
 
 
 def login_by_webview(parent: QWidget | None = None):
     window = LoginDialog(parent)
+    window.setAttribute(Qt.WidgetAttribute.WA_DeleteOnClose)
     status = window.exec()
     if status == QDialog.DialogCode.Rejected:
         return None

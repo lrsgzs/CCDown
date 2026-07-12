@@ -1,4 +1,6 @@
 from .logger import Logger
+from app.typings import AssetInfo
+
 
 def get_dict_from_url_params(text: str) -> dict:
     param = text.split("&")
@@ -20,7 +22,7 @@ def get_uid_from_url(url: str) -> int:
         return 0
 
 
-def get_tree_from_dict(origin_assets: dict, current_path: str, assets: list):
+def get_tree_from_dict(origin_assets: dict, current_path: str, assets: list[AssetInfo]):
     for i in origin_assets:
         filepath = f"{current_path}/{i['name']}"
         if i["isDir"]:

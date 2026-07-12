@@ -1,6 +1,7 @@
 from aiohttp import ClientSession
-from utils import get_tree_from_dict
-from constants import USER_AGENT
+from app.utils import get_tree_from_dict
+from app.constants import USER_AGENT
+from app.typings import ProjectInfo
 
 
 class ProjectAPI(object):
@@ -13,15 +14,9 @@ class ProjectAPI(object):
         else:
             self.header = header.copy()
             self.header['Cookie'] = cookie
-        self.session = ClientSession()
+        self.session = ClientSession(headers=self.header)
 
-    async def get_project(self, uid: int) -> dict:
-        """
-        get project info
-        :param uid: project id
-        :return: dict, eg: {"name": ..., "main.py": ..., "assets": [{"saveto": ..., "path": ..., "url": ...], "metadata": {...}}
-        """
-
+    async def get_project(self, uid: int) -> ProjectInfo:
         url_choices = [
             f"https://code.xueersi.com/api/compilers/v2/{uid}?id={uid}",
             f"https://code.xueersi.com/api/community/v4/projects/detail?id={uid}"
@@ -29,7 +24,7 @@ class ProjectAPI(object):
 
         res = {}
         for url in url_choices:
-            async with self.session.get(url, headers=self.header) as response:
+            async with self.session.get(url) as response:
                 res = await response.json()
             if res.get("status"):
                 break
@@ -37,17 +32,18 @@ class ProjectAPI(object):
         if res.get("status") is None:
             raise RuntimeError("作品不存在，请检查cookie和作品链接")
 
-        data = {"name": res["data"]["name"], "main.py": res["data"]["xml"], "metadata": res["data"]}
-        if res["data"]["assets"].get("assets_url") is None:
-            data["assets"] = []
-        else:
-            async with self.session.get(res["data"]["assets"]["assets_url"], headers=self.header) as response:
+        data: ProjectInfo = {
+            "name": res["data"]["name"],
+            "code": res["data"]["xml"],
+            "assets": [],
+            "metadata": res["data"]
+        }
+        if res["data"]["assets"].get("assets_url"):
+            async with self.session.get(res["data"]["assets"]["assets_url"]) as response:
                 origin_assets = (await response.json())["treeAssets"]
             assets = []
             get_tree_from_dict(origin_assets, "", assets)
-
             data["assets"] = assets
-        data["message"] = "操作成功"
         return data
 
     async def dispose(self):
