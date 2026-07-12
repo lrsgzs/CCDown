@@ -164,15 +164,20 @@ class MainWindow(QMainWindow):
         uid = get_uid_from_url(self.url_input.text())
         cookie = self.config["cookie"]
 
-        api = ProjectAPI(cookie)
-        data = await api.get_project(uid)
-        await api.dispose()
+        try:
+            api = ProjectAPI(cookie)
+            data = await api.get_project(uid)
+            await api.dispose()
 
-        self.current_project_label.setText(f"当前项目(1/1)：{data["metadata"]["name"]}")
-        await self._save_project(save_to, data)
+            self.current_project_label.setText(f"当前项目(1/1)：{data["metadata"]["name"]}")
+            await self._save_project(save_to, data)
 
-        self.logger.info("下载完毕")
-        QMessageBox.information(self, "成功", "下载完成")
+            self.logger.info(f"{uid} 下载完毕")
+            QMessageBox.information(self, "成功", "下载完成")
+        except:
+            self.logger.error(f"{uid} 下载失败")
+            self.logger.format_exc()
+            QMessageBox.critical(self, "错误", f"{uid} 下载失败")
 
     @asyncSlot()
     async def save_all_project(self):
@@ -187,16 +192,30 @@ class MainWindow(QMainWindow):
         cookie = self.config["cookie"]
         api = ProjectAPI(cookie)
 
+        failed_projects: list[int] = []
         self.current_project_label.setText(f"当前项目(0/{total})：无")
-
         for i, uid in enumerate(projects):
-            data = await api.get_project(uid)
-            self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data["metadata"]["name"]}")
-            await self._save_project(save_to, data)
+            try:
+                data = await api.get_project(uid)
+                self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data["metadata"]["name"]}")
+                await self._save_project(save_to, data)
+                self.logger.info(f"{uid} 下载完毕")
+            except:
+                failed_projects.append(uid)
+                self.logger.error(f"{uid} 下载失败")
+                self.logger.format_exc()
+                QMessageBox.critical(self, "错误", f"{uid} 下载失败")
 
         await api.dispose()
-        self.logger.info(f"下载完毕，共{total}个项目")
-        QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
+
+        if count := len(failed_projects) > 0:
+            self.logger.info(f"下载中出现错误，成功{total - count}个项目，失败{count}个项目：")
+            self.logger.info(failed_projects)
+            QMessageBox.warning(self, "警告",
+                                    f"下载完毕，成功{total - count}个项目，失败{count}个项目\n{failed_projects}")
+        else
+            self.logger.info(f"下载完毕，共{total}个项目")
+            QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
 
     async def _save_project(self, save_to: str, data: dict):
         if not self.session:
@@ -261,7 +280,7 @@ class MainWindow(QMainWindow):
                 async with aiofiles.open(save_to + i["path"], "wb") as file:
                     await file.write(await response.content.read())
 
-    async def _fetch_projects_list(self):
+    async def _fetch_projects_list(self) -> list[int]:
         if not self.session:
             raise RuntimeError("Session not initialized")
 
