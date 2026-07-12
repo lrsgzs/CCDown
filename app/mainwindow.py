@@ -212,7 +212,7 @@ class MainWindow(QMainWindow):
         uid = get_pid_from_url(self.url_input.text())
         try:
             data = await self.project_api.get_project(uid)
-            self.current_project_label.setText(f"当前项目(1/1)：{data["metadata"]["name"]}")
+            self.current_project_label.setText(f"当前项目(1/1)：{data['metadata']['name']}")
             await self._save_project(save_to, data)
 
             self.logger.info(f"{uid} 下载完毕")
@@ -278,7 +278,7 @@ class MainWindow(QMainWindow):
         for i, uid in enumerate(projects):
             try:
                 data = await self.project_api.get_project(uid)
-                self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data["metadata"]["name"]}")
+                self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data['metadata']['name']}")
                 await self._save_project(save_to, data)
                 self.logger.info(f"{uid} 下载完毕")
             except:
@@ -311,8 +311,8 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", "错误的作品")
             raise RuntimeError("错误的作品")
 
-        save_to = f"{save_to}/{metadata["lang"]}-{uid}"
-        self.logger.info(f"name='{metadata["name"]}'，将要保存到 {save_to}")
+        save_to = f"{save_to}/{metadata['lang']}-{uid}"
+        self.logger.info(f"name='{metadata['name']}'，将要保存到 {save_to}")
         if not os.path.exists(save_to):
             os.mkdir(save_to)
 
