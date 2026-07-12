@@ -57,15 +57,15 @@ class LoginDialog(QDialog):
 
         self.phone_input = QLineEdit()
         self.phone_input.textChanged.connect(self.check_phone_valid)
-        passport_layout.addRow("手机号：", self.phone_input)
+        passport_layout.addRow("手机号:", self.phone_input)
 
         self.password_input = QLineEdit()
         self.password_input.setEchoMode(QLineEdit.EchoMode.Password)
         self.password_input.textChanged.connect(self.check_password_valid)
-        passport_layout.addRow("密码：", self.password_input)
+        passport_layout.addRow("密码:", self.password_input)
 
         captcha_layout = QHBoxLayout()
-        passport_layout.addRow("验证码：", captcha_layout)
+        passport_layout.addRow("验证码:", captcha_layout)
         self.captcha_input = QLineEdit()
         self.captcha_input.textChanged.connect(self.check_captcha_valid)
         captcha_layout.addWidget(self.captcha_input)
@@ -159,7 +159,7 @@ class LoginDialog(QDialog):
         if data["errcode"] != 0:
             self.remove_captcha()
             QMessageBox.critical(self, "错误", data["errmsg"])
-            return 
+            return
 
         code = data["data"]["code"]
         async with self.session.post(

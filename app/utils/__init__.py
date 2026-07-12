@@ -12,8 +12,7 @@ def get_dict_from_url_params(text: str) -> dict:
     return params
 
 
-def get_uid_from_url(url: str) -> int:
-    """ get uid from url """
+def get_pid_from_url(url: str) -> int:
     if "code.xueersi.com/ide/code/" in url:
         return int(url.split("code.xueersi.com/ide/code/")[1].split("?")[0])
     elif "code.xueersi.com/home/project/detail" in url:

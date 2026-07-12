@@ -7,15 +7,17 @@ from aiohttp import ClientSession
 import aiofiles
 
 from app.api import ProjectAPI, CommentsAPI
-from app.utils import get_uid_from_url, Logger
+from app.utils import get_pid_from_url, Logger
 from app.constants import USER_AGENT, USE_WEBVIEW
 from app.typings import ProjectInfo
 
 if USE_WEBVIEW:
     from app.login.webview import login_by_webview
+
     login = login_by_webview
 else:
     from app.login.legacy import login_by_legacy
+
     login = login_by_legacy
 
 import json
@@ -36,6 +38,7 @@ class MainWindow(QMainWindow):
         self.logger = Logger("CCDown")
 
         self.setWindowTitle("CCDown")
+        self.setMinimumWidth(500)
 
         self.setup_ui()
         self.load_config()
@@ -94,16 +97,37 @@ class MainWindow(QMainWindow):
 
         url_input_layout = QHBoxLayout()
         url_group_layout.addLayout(url_input_layout)
-
         url_input_label = QLabel("URL:")
         url_input_layout.addWidget(url_input_label)
-
         self.url_input = QLineEdit()
         url_input_layout.addWidget(self.url_input)
 
+        submit_layout = QHBoxLayout()
+        url_group_layout.addLayout(submit_layout)
+
         self.submit_button = QPushButton("开始爬取")
         self.submit_button.clicked.connect(self.save_project)
-        url_group_layout.addWidget(self.submit_button)
+        submit_layout.addWidget(self.submit_button)
+
+        self.submit_multi_button = QPushButton("爬取多个作品...")
+        self.submit_multi_button.clicked.connect(self.save_multi_projects)
+        submit_layout.addWidget(self.submit_multi_button)
+
+        user_group = QGroupBox("爬取单人作品文件")
+        self.root_layout.addWidget(user_group)
+        user_group_layout = QVBoxLayout()
+        user_group.setLayout(user_group_layout)
+
+        user_input_layout = QHBoxLayout()
+        user_group_layout.addLayout(user_input_layout)
+        user_input_label = QLabel("作者空间 URL:")
+        user_input_layout.addWidget(user_input_label)
+        self.user_input = QLineEdit()
+        user_input_layout.addWidget(self.user_input)
+
+        self.submit_user_button = QPushButton("开始爬取")
+        self.submit_user_button.clicked.connect(self.save_user_projects)
+        user_group_layout.addWidget(self.submit_user_button)
 
         self.fetch_all_button = QPushButton("🔥一键爬取我的所有 Python/C++ 作品🔥")
         self.fetch_all_button.clicked.connect(self.save_all_project)
@@ -185,7 +209,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", "未选择保存位置")
             return
 
-        uid = get_uid_from_url(self.url_input.text())
+        uid = get_pid_from_url(self.url_input.text())
         try:
             data = await self.project_api.get_project(uid)
             self.current_project_label.setText(f"当前项目(1/1)：{data["metadata"]["name"]}")
@@ -199,7 +223,46 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", f"{uid} 下载失败")
 
     @asyncSlot()
+    async def save_multi_projects(self):
+        if not self.project_api:
+            raise RuntimeError("ProjectAPI not initialized")
+
+        text = QInputDialog.getMultiLineText(self, "提示", "请输入作品链接，一行一个")[0]
+        links = text.strip().splitlines()
+
+        if len(links) == 0:
+            QMessageBox.critical(self, "错误", "未输入作品链接")
+            return
+
+        projects: list[int] = []
+        for link in links:
+            pid = get_pid_from_url(link)
+            if pid == 0:
+                self.logger.error("错误的作品链接:" + link)
+                QMessageBox.critical(self, "错误", "错误的作品链接:\n" + link)
+                continue
+            projects.append(pid)
+
+        await self._save_projects(projects)
+
+    @asyncSlot()
+    async def save_user_projects(self):
+        if not self.project_api:
+            raise RuntimeError("ProjectAPI not initialized")
+
+        link = self.user_input.text()
+        if not link:
+            QMessageBox.critical(self, "错误", "未输入作者空间链接")
+            return
+
+        uid = int(link.split("code.xueersi.com/space/")[1].split("?")[0])
+        await self._save_projects(await self._fetch_projects_list(uid))
+
+    @asyncSlot()
     async def save_all_project(self):
+        await self._save_projects(await self._fetch_my_projects_list())
+
+    async def _save_projects(self, projects: list[int]):
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
 
@@ -209,9 +272,7 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", "未选择保存位置")
             return
 
-        projects = await self._fetch_projects_list()
         total = len(projects)
-
         failed_projects: list[int] = []
         self.current_project_label.setText(f"当前项目(0/{total})：无")
         for i, uid in enumerate(projects):
@@ -224,13 +285,12 @@ class MainWindow(QMainWindow):
                 failed_projects.append(uid)
                 self.logger.error(f"{uid} 下载失败")
                 self.logger.format_exc()
-                QMessageBox.critical(self, "错误", f"{uid} 下载失败")
 
-        if count := len(failed_projects) > 0:
+        if (count := len(failed_projects)) > 0:
             self.logger.info(f"下载中出现错误，成功{total - count}个项目，失败{count}个项目：")
             self.logger.info(failed_projects)
             QMessageBox.warning(self, "警告",
-                                    f"下载完毕，成功{total - count}个项目，失败{count}个项目\n{failed_projects}")
+                                f"下载完毕，成功{total - count}个项目，失败{count}个项目\n{failed_projects}")
         else:
             self.logger.info(f"下载完毕，共{total}个项目")
             QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
@@ -247,9 +307,9 @@ class MainWindow(QMainWindow):
 
         self.logger.debug(f"作品ID为 {uid}")
         if uid == 0:
-            self.logger.error("错误的作品链接")
-            QMessageBox.critical(self, "错误", "错误的作品链接")
-            return
+            self.logger.error("错误的作品")
+            QMessageBox.critical(self, "错误", "错误的作品")
+            raise RuntimeError("错误的作品")
 
         save_to = f"{save_to}/{metadata["lang"]}-{uid}"
         self.logger.info(f"name='{metadata["name"]}'，将要保存到 {save_to}")
@@ -302,7 +362,40 @@ class MainWindow(QMainWindow):
                 async with aiofiles.open(save_to + i["path"], "wb") as file:
                     await file.write(await response.content.read())
 
-    async def _fetch_projects_list(self) -> list[int]:
+    async def _fetch_projects_list(self, user: int) -> list[int]:
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+
+        projects_list: list[int] = []
+        async with self.session.get(
+                f"https://code.xueersi.com/api/space/works?user_id={user}&page=1&per_page=20&order_type=time") as response:
+            data = await response.json()
+            if data.get("data") is None:
+                self.logger.error(data)
+                QMessageBox.critical(self, "错误", str(data))
+                return []
+
+            first_page = data["data"]
+            for project in first_page["data"]:
+                if project["lang"] == "scratch":
+                    continue
+                projects_list.append(project["id"])
+
+        total: int = first_page["total"]
+        total_pages = total // 20 + int(total % 20 > 0)
+
+        for i in range(2, total_pages + 1):
+            url = f"https://code.xueersi.com/api/space/works?user_id={user}&page={i}&per_page=20&order_type=time"
+            async with self.session.get(url) as response:
+                page = (await response.json())["data"]
+                for project in page["data"]:
+                    if project["lang"] == "scratch":
+                        continue
+                    projects_list.append(project["id"])
+
+        return projects_list
+
+    async def _fetch_my_projects_list(self) -> list[int]:
         if not self.session:
             raise RuntimeError("Session not initialized")
 
@@ -314,6 +407,7 @@ class MainWindow(QMainWindow):
             data = await response.json()
             if data.get("data") is None:
                 self.logger.error(data)
+                QMessageBox.critical(self, "错误", str(data))
                 return []
 
             py_first_page = data["data"]
