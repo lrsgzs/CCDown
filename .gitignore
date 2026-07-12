@@ -1,6 +1,9 @@
-/projects/
+.venv/
 __pycache__/
 *.pyc
-.venv
 packaging/
-config.json
+dist/
+build/
+
+/data/
+/projects/

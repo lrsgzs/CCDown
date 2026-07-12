@@ -36,7 +36,7 @@ class ProjectAPI(object):
                 origin_assets = (await response.json())["treeAssets"]
             assets = []
             get_tree_from_dict(origin_assets, "", assets)
-    
+
             data["assets"] = assets
         data["message"] = "操作成功"
         return data

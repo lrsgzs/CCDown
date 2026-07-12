@@ -1,3 +1,5 @@
+from .logger import Logger
+
 def get_dict_from_url_params(text: str) -> dict:
     param = text.split("&")
     params = {}

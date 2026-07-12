@@ -5,10 +5,14 @@ from PySide6.QtWebEngineCore import *
 from PySide6.QtWebEngineWidgets import *
 from qasync import asyncSlot
 
+from app.constants import USER_AGENT
+
 from http.cookies import SimpleCookie
 from typing import Any
 import asyncio
 import sys
+
+print("loaded webview library")
 
 def create_cookie(input_: dict[Any, Any] | str) -> SimpleCookie:
     if isinstance(input_, dict):
@@ -38,6 +42,7 @@ class LoginDialog(QDialog):
         self.logged = False
 
         self.profile = QWebEngineProfile()
+        self.profile.setHttpUserAgent(USER_AGENT)
         cookie_store = self.profile.cookieStore()
         cookie_store.cookieAdded.connect(self.on_cookie_added)
         cookie_store.cookieRemoved.connect(self.on_cookie_removed)
@@ -72,7 +77,7 @@ class LoginDialog(QDialog):
             if choice in target:
                 self.logged = True
                 self.load_url("https://code.xueersi.com")
-                await asyncio.sleep(5)
+                await asyncio.sleep(3)
                 self.accept()
 
     def load_url(self, url: str) -> None:
@@ -88,9 +93,7 @@ class LoginDialog(QDialog):
         self.reject()
 
 
-def login_to_get_cookie(parent: QWidget | None = None):
-    """通过登录来获取cookie"""
-
+def login_by_webview(parent: QWidget | None = None):
     window = LoginDialog(parent)
     status = window.exec()
     if status == QDialog.DialogCode.Rejected:

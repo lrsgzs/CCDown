@@ -1,7 +1,10 @@
 [project]
 name = "ccdown"
 version = "0.1.0"
+description = "下载学而思作品信息&内容"
+readme = "README.md"
 requires-python = ">=3.14"
+
 dependencies = [
     "aiofiles~=25.1.0",
     "aiohttp~=3.14.1",
@@ -10,5 +13,5 @@ dependencies = [
 ]
 
 [[tool.uv.index]]
-url = "https://pypi.tuna.tsinghua.edu.cn/simple"
+url = "https://mirrors.aliyun.com/pypi/simple/"
 default = true
