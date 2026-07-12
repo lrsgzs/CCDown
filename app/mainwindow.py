@@ -131,7 +131,39 @@ class MainWindow(QMainWindow):
 
         self.fetch_all_button = QPushButton("🔥一键爬取我的所有 Python/C++ 作品🔥")
         self.fetch_all_button.clicked.connect(self.save_all_project)
-        self.root_layout.addWidget(self.fetch_all_button)
+        user_group_layout.addWidget(self.fetch_all_button)
+
+        config_group = QGroupBox("配置")
+        self.root_layout.addWidget(config_group)
+        config_group_layout = QFormLayout()
+        config_group.setLayout(config_group_layout)
+
+        type_layout = QHBoxLayout()
+        config_group_layout.addRow("筛选类型:", type_layout)
+        self.type_normal_checkbox = QCheckBox("个人创作")
+        self.type_normal_checkbox.setChecked(True)
+        type_layout.addWidget(self.type_normal_checkbox)
+        self.type_homework_checkbox = QCheckBox("随堂练习")
+        type_layout.addWidget(self.type_homework_checkbox)
+
+        lang_layout = QHBoxLayout()
+        config_group_layout.addRow("筛选语言:", lang_layout)
+        self.lang_scratch_checkbox = QCheckBox("Scratch")
+        self.lang_scratch_checkbox.setEnabled(False)
+        lang_layout.addWidget(self.lang_scratch_checkbox)
+        self.lang_python_checkbox = QCheckBox("Python")
+        self.lang_python_checkbox.setChecked(True)
+        lang_layout.addWidget(self.lang_python_checkbox)
+        self.lang_webpy_checkbox = QCheckBox("WebPy")
+        self.lang_webpy_checkbox.setChecked(True)
+        lang_layout.addWidget(self.lang_webpy_checkbox)
+        self.lang_cpp_checkbox = QCheckBox("C++")
+        self.lang_cpp_checkbox.setChecked(True)
+        lang_layout.addWidget(self.lang_cpp_checkbox)
+        self.lang_others_checkbox = QCheckBox("其他?")
+        self.lang_others_checkbox.setChecked(True)
+        self.lang_others_checkbox.setToolTip("真的有吗？")
+        lang_layout.addWidget(self.lang_others_checkbox)
 
         self.current_project_label = QLabel("当前项目(0/0)：无")
         self.root_layout.addWidget(self.current_project_label)
@@ -199,7 +231,7 @@ class MainWindow(QMainWindow):
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
 
-        if not self.url_input.text():
+        if not (link := self.url_input.text()):
             QMessageBox.critical(self, "错误", "未输入作品链接")
             return
 
@@ -212,18 +244,12 @@ class MainWindow(QMainWindow):
             self.submit_button.setEnabled(True)
             return
 
-        uid = get_pid_from_url(self.url_input.text())
-        try:
-            data = await self.project_api.get_project(uid)
-            self.current_project_label.setText(f"当前项目(1/1)：{data['metadata']['name']}")
-            await self._save_project(save_to, data)
+        pid = get_pid_from_url(link)
+        if pid == 0:
+            self.logger.error("错误的作品链接:" + link)
+            QMessageBox.critical(self, "错误", "错误的作品链接:\n" + link)
 
-            self.logger.info(f"{uid} 下载完毕")
-            QMessageBox.information(self, "成功", "下载完成")
-        except:
-            self.logger.error(f"{uid} 下载失败")
-            self.logger.format_exc()
-            QMessageBox.critical(self, "错误", f"{uid} 下载失败")
+        await self._save_projects([pid])
 
         self.submit_button.setEnabled(True)
 
@@ -278,6 +304,21 @@ class MainWindow(QMainWindow):
         await self._save_projects(await self._fetch_my_projects_list())
 
     async def _save_projects(self, projects: list[int]):
+        def _filter(project: ProjectInfo) -> bool:
+            type_check = {
+                "normal": self.type_normal_checkbox.isChecked(),
+                "homework": self.type_homework_checkbox.isChecked(),
+            }.get(project['metadata']['type'], self.type_normal_checkbox.isChecked())
+
+            lang_check = {
+                "scratch": self.lang_scratch_checkbox.isChecked(),
+                "python": self.lang_python_checkbox.isChecked(),
+                "webpy": self.lang_webpy_checkbox.isChecked(),
+                "cpp": self.lang_cpp_checkbox.isChecked(),
+            }.get(project['metadata']['lang'], self.lang_others_checkbox.isChecked())
+
+            return type_check and lang_check
+
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
 
@@ -287,18 +328,30 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", "未选择保存位置")
             return
 
-        total = len(projects)
-        failed_projects: list[int] = []
-        self.current_project_label.setText(f"当前项目(0/{total})：无")
-        for i, uid in enumerate(projects):
+        self.logger.info(f"筛选作品中...")
+
+        projects_data: list[ProjectInfo] = []
+        failed_projects: list[str] = []
+        for pid in projects:
             try:
-                data = await self.project_api.get_project(uid)
+                data = await self.project_api.get_project(pid)
+                if _filter(data):
+                    projects_data.append(data)
+            except:
+                failed_projects.append(str(pid))
+                self.logger.error(f"{pid} 初筛出现错误")
+                self.logger.format_exc()
+
+        total = len(projects_data)
+        self.current_project_label.setText(f"当前项目(0/{total})：无")
+        for i, data in enumerate(projects_data):
+            try:
                 self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data['metadata']['name']}")
                 await self._save_project(save_to, data)
-                self.logger.info(f"{uid} 下载完毕")
+                self.logger.info(f"{data['metadata']['topic_id']} 下载完毕")
             except:
-                failed_projects.append(uid)
-                self.logger.error(f"{uid} 下载失败")
+                failed_projects.append(data['metadata']['topic_id'])
+                self.logger.error(f"{data['metadata']['topic_id']} 下载失败")
                 self.logger.format_exc()
 
         if (count := len(failed_projects)) > 0:
@@ -444,35 +497,37 @@ lang: {metadata['lang']}
 
         projects_list: list[int] = []
 
-        # python part
+        if self.type_normal_checkbox.isChecked():
+            projects_list.extend(await self.__fetch_my_projects_part("python", "normal"))
+            projects_list.extend(await self.__fetch_my_projects_part("compilers", "normal"))
+
+        if self.type_homework_checkbox.isChecked():
+            projects_list.extend(await self.__fetch_my_projects_part("python", "homework"))
+            projects_list.extend(await self.__fetch_my_projects_part("compilers", "homework"))
+
+        return projects_list
+
+    async def __fetch_my_projects_part(self, project_type: str, type: str) -> list[int]:
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+
+        projects_list: list[int] = []
+
         # default params: ?published=all&type=normal&page=1&per_page=20
-        async with self.session.get("https://code.xueersi.com/api/python/my?page=1") as response:
+        async with self.session.get(f"https://code.xueersi.com/api/{project_type}/my?type={type}&page=1") as response:
             data = await response.json()
             if data.get("data") is None:
                 self.logger.error(data)
                 QMessageBox.critical(self, "错误", str(data))
                 return []
 
-            py_first_page = data["data"]
-            for project in py_first_page["data"]:
+            first_page = data["data"]
+            for project in first_page["data"]:
                 projects_list.append(project["id"])
 
-        py_total_pages = py_first_page["last_page"]
-        for i in range(2, py_total_pages + 1):
-            async with self.session.get(f"https://code.xueersi.com/api/python/my?page={i}") as response:
-                page = (await response.json())["data"]
-                for project in page["data"]:
-                    projects_list.append(project["id"])
-
-        # cpp part
-        async with self.session.get("https://code.xueersi.com/api/compilers/my?page=1") as response:
-            cpp_first_page = (await response.json())["data"]
-            for project in cpp_first_page["data"]:
-                projects_list.append(project["id"])
-
-        cpp_total_pages = cpp_first_page["last_page"]
-        for i in range(2, cpp_total_pages + 1):
-            async with self.session.get(f"https://code.xueersi.com/api/compilers/my?page={i}") as response:
+        total_pages = first_page["last_page"]
+        for i in range(2, total_pages + 1):
+            async with self.session.get(f"https://code.xueersi.com/api/{project_type}/my?type={type}&page={i}") as response:
                 page = (await response.json())["data"]
                 for project in page["data"]:
                     projects_list.append(project["id"])
