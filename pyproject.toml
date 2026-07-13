@@ -14,6 +14,9 @@ dependencies = [
     "sqlalchemy>=2.0.51",
 ]
 
+[tool.uv]
+python-install-mirror = "https://registry.npmmirror.com/-/binary/python-build-standalone/"
+
 [[tool.uv.index]]
 url = "https://mirrors.aliyun.com/pypi/simple/"
 default = true
