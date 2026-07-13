@@ -3,12 +3,13 @@ from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 from qasync import asyncSlot, asyncClose
 
+from asyncio import Semaphore, gather
 from aiohttp import ClientSession
 import aiofiles
 
 from app.api import ProjectAPI, CommentsAPI
 from app.utils import get_pid_from_url, Logger, get_topic_id_from_url
-from app.constants import USER_AGENT, USE_WEBVIEW
+from app.constants import USER_AGENT, USE_WEBVIEW, DOWNLOAD_ASSETS_THREADS
 from app.typings import ProjectInfo
 
 if USE_WEBVIEW:
@@ -442,32 +443,38 @@ lang: {metadata['lang']}
             async with aiofiles.open(save_to + "/main.py", "w", encoding="utf-8") as file:
                 await file.write(data["code"])
 
-        async with ClientSession(headers=HEADER.copy()) as download_session:
-            for i in data["assets"]:
-                need_make_dirs = i["saveto"].split("/")
-                need_make_dirs.pop(0)
-                current_path = ""
-                skip = False
-                for j in need_make_dirs:
-                    current_path = current_path + "/" + j
-                    if not os.path.exists(save_to + current_path):
-                        self.logger.debug(f"正在创建 {current_path} 文件夹")
+        tasks = []
+        semaphore = Semaphore(DOWNLOAD_ASSETS_THREADS)
+        for i in data["assets"]:
+            need_make_dirs = i["saveto"].split("/")
+            need_make_dirs.pop(0)
+            current_path = ""
+            skip = False
+            for j in need_make_dirs:
+                current_path = current_path + "/" + j
+                if not os.path.exists(save_to + current_path):
+                    self.logger.debug(f"正在创建 {current_path} 文件夹")
 
-                        try:
-                            os.mkdir(save_to + current_path)
-                        except:
-                            self.logger.format_exc()
-                            skip = True
-                            break
-                if skip:
-                    continue
-                try:
-                    self.logger.debug(f"正在下载 {i['path']}")
-                    async with download_session.get(i["url"]) as response:
-                        async with aiofiles.open(save_to + i["path"], "wb") as file:
-                            await file.write(await response.content.read())
-                except:
-                    self.logger.format_exc()
+                    try:
+                        os.mkdir(save_to + current_path)
+                    except:
+                        self.logger.format_exc()
+                        skip = True
+                        break
+            if skip:
+                continue
+            tasks.append(self._download_task(semaphore, save_to, i["path"], i["url"]))
+        await gather(*tasks)
+
+    async def _download_task(self, semaphore: Semaphore, saveto: str, path: str, url: str) -> None:
+        async with semaphore:
+            try:
+                async with self.session.get(url) as response:
+                    async with aiofiles.open(saveto + path, "wb") as file:
+                        await file.write(await response.content.read())
+                self.logger.debug(f"成功下载 {path}")
+            except:
+                self.logger.format_exc()
 
     async def _fetch_projects_list(self, user: int) -> list[str]:
         if not self.session:
