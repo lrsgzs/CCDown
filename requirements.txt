@@ -2,3 +2,5 @@ pyside6~=6.11.1
 qasync~=0.28.0
 aiofiles~=25.1.0
 aiohttp~=3.14.1
+aiozipstream>=0.4
+sqlalchemy>=2.0.51

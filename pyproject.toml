@@ -3,7 +3,7 @@ name = "ccdown"
 version = "0.1.0"
 description = "下载学而思作品信息&内容"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11"
 
 dependencies = [
     "aiofiles~=25.1.0",
