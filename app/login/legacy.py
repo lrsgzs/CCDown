@@ -26,7 +26,7 @@ class LoginDialog(QDialog):
         self.is_captcha_valid = False
         self.cookie = ""
 
-        self.setWindowTitle("登录 (旧版)")
+        self.setWindowTitle("登录 (API)")
         self.setMinimumWidth(400)
         self.setMaximumHeight(300)
         self.setup_ui()
@@ -187,6 +187,4 @@ def login_by_legacy(parent: QWidget):
     status = dialog.exec()
     if status == QDialog.DialogCode.Rejected:
         return None
-
-    # return QInputDialog.getText(parent, "提示", "请输入 cookie")[0]
     return dialog.cookie

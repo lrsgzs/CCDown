@@ -10,17 +10,8 @@ import aiofiles
 
 from app.api import ProjectAPI, CommentsAPI
 from app.utils import Logger, get_topic_id_from_url
-from app.constants import USER_AGENT, USE_WEBVIEW, DOWNLOAD_ASSETS_THREADS
+from app.constants import USER_AGENT, DOWNLOAD_ASSETS_THREADS
 from app.typings import ProjectInfo
-
-if USE_WEBVIEW:
-    from app.login.webview import login_by_webview
-
-    login = login_by_webview
-else:
-    from app.login.legacy import login_by_legacy
-
-    login = login_by_legacy
 
 import shutil
 import json
@@ -83,16 +74,27 @@ class MainWindow(QMainWindow):
 
         cookie_group = QGroupBox("cookie 配置")
         self.root_layout.addWidget(cookie_group)
-        cookie_group_layout = QHBoxLayout()
+        cookie_group_layout = QFormLayout()
         cookie_group.setLayout(cookie_group_layout)
 
+        cookit_input_layout = QHBoxLayout()
+        cookie_group_layout.addRow("cookie:", cookit_input_layout)
         self.cookie_input = QLineEdit()
         self.cookie_input.setReadOnly(True)
-        cookie_group_layout.addWidget(self.cookie_input)
-
+        cookit_input_layout.addWidget(self.cookie_input)
         self.get_cookit_button = QPushButton("获取 cookie")
         self.get_cookit_button.clicked.connect(self.login)
-        cookie_group_layout.addWidget(self.get_cookit_button)
+        cookit_input_layout.addWidget(self.get_cookit_button)
+
+        login_way_layout = QHBoxLayout()
+        cookie_group_layout.addRow("获取方式:", login_way_layout)
+        self.login_by_legacy_radio = QRadioButton("API 登录(推荐!!!)")
+        self.login_by_legacy_radio.setChecked(True)
+        login_way_layout.addWidget(self.login_by_legacy_radio)
+        self.login_by_webview_radio = QRadioButton("WebView")
+        login_way_layout.addWidget(self.login_by_webview_radio)
+        self.login_by_manual_radio = QRadioButton("手动输入")
+        login_way_layout.addWidget(self.login_by_manual_radio)
 
         url_group = QGroupBox("爬取单个作品文件")
         self.root_layout.addWidget(url_group)
@@ -106,16 +108,12 @@ class MainWindow(QMainWindow):
         self.url_input = QLineEdit()
         url_input_layout.addWidget(self.url_input)
 
-        submit_layout = QHBoxLayout()
-        url_group_layout.addLayout(submit_layout)
-
         self.submit_button = QPushButton("开始爬取")
         self.submit_button.clicked.connect(self.save_project)
-        submit_layout.addWidget(self.submit_button)
-
+        url_group_layout.addWidget(self.submit_button)
         self.submit_multi_button = QPushButton("爬取多个作品...")
         self.submit_multi_button.clicked.connect(self.save_multi_projects)
-        submit_layout.addWidget(self.submit_multi_button)
+        url_group_layout.addWidget(self.submit_multi_button)
 
         user_group = QGroupBox("爬取单人作品文件")
         self.root_layout.addWidget(user_group)
@@ -239,7 +237,15 @@ class MainWindow(QMainWindow):
     def login(self):
         self.logger.info("尝试登录")
         QMessageBox.information(self, "提示", "请在即将弹出的窗口进行登录")
-        cookie = login(self)
+
+        if self.login_by_webview_radio.isChecked():
+            from app.login.webview import login_by_webview
+            cookie = login_by_webview(self)
+        elif self.login_by_manual_radio.isChecked():
+            cookie = QInputDialog.getText(self, "提示", "请输入 cookie")[0]
+        else:
+            from app.login.legacy import login_by_legacy
+            cookie = login_by_legacy(self)
 
         if cookie:
             self.config["cookie"] = cookie
