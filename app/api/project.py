@@ -1,7 +1,10 @@
 from aiohttp import ClientSession
 from app.utils import get_tree_from_dict
 from app.constants import USER_AGENT
-from app.typings import ProjectInfo
+from app.typings import ProjectInfo, AssetInfo
+
+from random import randint
+import json
 
 
 class ProjectAPI(object):
@@ -23,9 +26,23 @@ class ProjectAPI(object):
         ])
 
     async def get_scratch_project(self, pid: int) -> ProjectInfo:
-        return await self._get_project([
+        info = await self._get_project([
             f"https://code.xueersi.com/api/projects/v2/{pid}?id={pid}"
         ])
+        project_json = json.loads(info["code"])
+
+        assets: list[AssetInfo] = []
+        for target in project_json["targets"]:
+            target_assets = target["costumes"] + target["sounds"]
+            for asset in target_assets:
+                filename = asset["md5ext"]
+                assets.append(AssetInfo(url=f"https://static{randint(0, 11)}.xesimg.com/"
+                                            f"hufu-code/common/mit/{filename}",
+                                        saveto="/content",
+                                        path=f"/content/{filename}"))
+
+        info["assets"] = assets
+        return info
 
     async def _get_project(self, choices: list[str]) -> ProjectInfo:
         res = {}

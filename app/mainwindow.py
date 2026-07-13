@@ -352,10 +352,7 @@ class MainWindow(QMainWindow):
         for i, data in enumerate(projects_data):
             try:
                 self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data['metadata']['name']}")
-                if data["metadata"]["lang"] == "scratch":
-                    await self._save_scratch_project(save_to, data)
-                else:
-                    await self._save_project(save_to, data)
+                await self._save_project(save_to, data)
                 self.logger.info(f"{data['metadata']['topic_id']} 下载完毕")
             except:
                 failed_projects.append(data['metadata']['topic_id'])
@@ -370,32 +367,6 @@ class MainWindow(QMainWindow):
         else:
             self.logger.info(f"下载完毕，共{total}个项目")
             QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
-
-    async def _save_scratch_project(self, save_to: str, data: ProjectInfo):
-        # TODO: 和 _save_project 合并
-
-        if not self.session:
-            raise RuntimeError("Session not initialized")
-
-        metadata = data["metadata"]
-        uid: int = metadata["id"]
-
-        self.logger.info(f"作品ID为 {uid}")
-        if uid == 0:
-            self.logger.error("错误的作品")
-            QMessageBox.critical(self, "错误", "错误的作品")
-            raise RuntimeError("错误的作品")
-
-        save_to = f"{save_to}/{metadata['lang']}-{uid}"
-        self.logger.debug(f"name='{metadata['name']}'，将要保存到 {save_to}")
-        if not os.path.exists(save_to):
-            os.mkdir(save_to)
-
-        await self.__save_project_basic(save_to, data)
-
-        self.logger.debug("正在保存 /project.json")
-        async with aiofiles.open(save_to + "/project.json", "w", encoding="utf-8") as file:
-            await file.write(data["code"])
 
     async def _save_project(self, save_to: str, data: ProjectInfo):
         if not self.session:
@@ -415,11 +386,55 @@ class MainWindow(QMainWindow):
         if not os.path.exists(save_to):
             os.mkdir(save_to)
 
-        await self.__save_project_basic(save_to, data)
+        self.logger.debug("正在保存 /metadata.json")
+        async with aiofiles.open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
+            content = metadata.copy()
+            del content["xml"]
+            await file.write(json.dumps(content, ensure_ascii=False, indent=4))
+
+        self.logger.debug("正在保存 /readme.md")
+        description = metadata["description"].replace("\n", "\n\n")
+        content = f"""# {metadata['name']}
+
+    ```yaml
+    topic_id: {metadata['topic_id']}
+    author: {metadata['username']}
+    lang: {metadata['lang']}
+    ```
+
+    {description}
+    """
+        async with aiofiles.open(save_to + "/readme.md", "w", encoding="utf-8") as file:
+            await file.write(content)
+
+        thumbnail_url = metadata["thumbnail"]
+        if thumbnail_url:
+            thumbnail_ext = thumbnail_url.split(".")[-1].lower()
+            thumbnail_filename = f"thumbnail.{thumbnail_ext}"
+
+            self.logger.debug(f"正在下载 /{thumbnail_filename}")
+            async with self.session.get(thumbnail_url) as response:
+                async with aiofiles.open(save_to + "/" + thumbnail_filename, "wb") as file:
+                    await file.write(await response.content.read())
+
+        try:
+            self.logger.debug("正在保存 /comments.json")
+            comments = await self.comments_api.get_comments(metadata["topic_id"])
+            async with aiofiles.open(save_to + "/comments.json", "w") as file:
+                await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
+        except:
+            self.logger.warning(f"{topic_id} 评论下载失败")
 
         if metadata["lang"] == "cpp":
             self.logger.debug("正在保存 /main.cpp")
             async with aiofiles.open(save_to + "/main.cpp", "w", encoding="utf-8") as file:
+                await file.write(data["code"])
+        elif metadata["lang"] == "scratch":
+            self.logger.debug("正在保存 /content/project.json")
+
+            if not os.path.exists(save_to + "/content"):
+                os.mkdir(save_to + "/content")
+            async with aiofiles.open(save_to + "/content/project.json", "w", encoding="utf-8") as file:
                 await file.write(data["code"])
         else:
             self.logger.debug("正在保存 /main.py")
@@ -451,55 +466,6 @@ class MainWindow(QMainWindow):
                         await file.write(await response.content.read())
             except:
                 self.logger.format_exc()
-
-    async def __save_project_basic(self, save_to: str, data: ProjectInfo):
-        if not self.session:
-            raise RuntimeError("Session not initialized")
-
-        if not self.comments_api:
-            raise RuntimeError("CommentsAPI not initialized")
-
-        metadata = data["metadata"]
-        topic_id: str = metadata["topic_id"]
-
-        self.logger.debug("正在保存 /metadata.json")
-        async with aiofiles.open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
-            content = metadata.copy()
-            del content["xml"]
-            await file.write(json.dumps(content, ensure_ascii=False, indent=4))
-
-        self.logger.debug("正在保存 /readme.md")
-        description = metadata["description"].replace("\n", "\n\n")
-        content = f"""# {metadata['name']}
-
-```yaml
-topic_id: {metadata['topic_id']}
-author: {metadata['username']}
-lang: {metadata['lang']}
-```
-
-{description}
-"""
-        async with aiofiles.open(save_to + "/readme.md", "w", encoding="utf-8") as file:
-            await file.write(content)
-
-        thumbnail_url = metadata["thumbnail"]
-        if thumbnail_url:
-            thumbnail_ext = thumbnail_url.split(".")[-1].lower()
-            thumbnail_filename = f"thumbnail.{thumbnail_ext}"
-
-            self.logger.debug(f"正在下载 /{thumbnail_filename}")
-            async with self.session.get(thumbnail_url) as response:
-                async with aiofiles.open(save_to + "/" + thumbnail_filename, "wb") as file:
-                    await file.write(await response.content.read())
-
-        try:
-            self.logger.debug("正在保存 /comments.json")
-            comments = await self.comments_api.get_comments(metadata["topic_id"])
-            async with aiofiles.open(save_to + "/comments.json", "w") as file:
-                await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
-        except:
-            self.logger.warning(f"{topic_id} 评论下载失败")
 
     async def _fetch_projects_list(self, user: int) -> list[str]:
         if not self.session:
