@@ -169,6 +169,26 @@ class MainWindow(QMainWindow):
         self.lang_others_checkbox.setToolTip("真的有吗？")
         lang_layout.addWidget(self.lang_others_checkbox)
 
+        status_layout = QHBoxLayout()
+        config_group_layout.addRow("筛选状态:", status_layout)
+        self.status_unpublished_checkbox = QCheckBox("未发布")
+        self.status_unpublished_checkbox.setChecked(True)
+        status_layout.addWidget(self.status_unpublished_checkbox)
+        self.status_judging_checkbox = QCheckBox("审核中")
+        self.status_judging_checkbox.setChecked(True)
+        status_layout.addWidget(self.status_judging_checkbox)
+        self.status_published_checkbox = QCheckBox("已发布")
+        self.status_published_checkbox.setChecked(True)
+        status_layout.addWidget(self.status_published_checkbox)
+        self.status_removed_checkbox = QCheckBox("已下架")
+        self.status_removed_checkbox.setChecked(True)
+        status_layout.addWidget(self.status_removed_checkbox)
+
+        download_options_layout = QHBoxLayout()
+        config_group_layout.addRow("下载选项:", download_options_layout)
+        self.skip_downloaded_projects_checkbox = QCheckBox("跳过已下载项目")
+        download_options_layout.addWidget(self.skip_downloaded_projects_checkbox)
+
         self.current_project_label = QLabel("当前项目(0/0)：无")
         self.root_layout.addWidget(self.current_project_label)
 
@@ -312,16 +332,26 @@ class MainWindow(QMainWindow):
             type_check = {
                 "normal": self.type_normal_checkbox.isChecked(),
                 "homework": self.type_homework_checkbox.isChecked(),
-            }.get(project['metadata']['type'], self.type_normal_checkbox.isChecked())
+            }.get(project["metadata"]["type"], self.type_normal_checkbox.isChecked())
 
             lang_check = {
                 "scratch": self.lang_scratch_checkbox.isChecked(),
                 "python": self.lang_python_checkbox.isChecked(),
                 "webpy": self.lang_webpy_checkbox.isChecked(),
                 "cpp": self.lang_cpp_checkbox.isChecked(),
-            }.get(project['metadata']['lang'], self.lang_others_checkbox.isChecked())
+            }.get(project["metadata"]["lang"], self.lang_others_checkbox.isChecked())
 
-            return type_check and lang_check
+            if project["metadata"]["removed"] == 1 and self.status_removed_checkbox.isChecked():
+                return type_check and lang_check
+
+            status_check = {
+                0: self.status_unpublished_checkbox.isChecked(),
+                2: self.status_judging_checkbox.isChecked(),
+                1: self.status_published_checkbox.isChecked(),
+            }.get(project["metadata"]["published"], self.status_published_checkbox.isChecked())
+
+            return type_check and lang_check and status_check
+
 
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
@@ -389,6 +419,9 @@ class MainWindow(QMainWindow):
         self.logger.debug(f"name='{metadata['name']}'，将要保存到 {save_to}")
         if not os.path.exists(save_to):
             os.mkdir(save_to)
+        elif self.skip_downloaded_projects_checkbox.isChecked():
+            self.logger.debug("已下载，跳过")
+            return
 
         self.logger.debug("正在保存 /metadata.json")
         async with aiofiles.open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
