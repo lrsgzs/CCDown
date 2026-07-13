@@ -24,7 +24,8 @@ import json
 import os
 
 HEADER = {
-    'user-agent': USER_AGENT
+    "User-Agent": USER_AGENT,
+    "Referer": "https://code.xueersi.com/",
 }
 
 
@@ -71,7 +72,7 @@ class MainWindow(QMainWindow):
         title_label.setFont(title_font)
         self.root_layout.addWidget(title_label)
 
-        description_label = QLabel("为下载完整学而思编程 Python 作品而生")
+        description_label = QLabel("为下载完整学而思编程作品而生")
         description_font = QFont()
         description_font.setPointSize(12)
         description_label.setFont(description_font)
@@ -129,7 +130,7 @@ class MainWindow(QMainWindow):
         self.submit_user_button.clicked.connect(self.save_user_projects)
         user_group_layout.addWidget(self.submit_user_button)
 
-        self.fetch_all_button = QPushButton("🔥一键爬取我的所有 Python/C++ 作品🔥")
+        self.fetch_all_button = QPushButton("🔥一键爬取我的所有作品🔥")
         self.fetch_all_button.clicked.connect(self.save_all_project)
         user_group_layout.addWidget(self.fetch_all_button)
 
@@ -396,14 +397,14 @@ class MainWindow(QMainWindow):
         description = metadata["description"].replace("\n", "\n\n")
         content = f"""# {metadata['name']}
 
-    ```yaml
-    topic_id: {metadata['topic_id']}
-    author: {metadata['username']}
-    lang: {metadata['lang']}
-    ```
+```yaml
+topic_id: {metadata['topic_id']}
+author: {metadata['username']}
+lang: {metadata['lang']}
+```
 
-    {description}
-    """
+{description}
+"""
         async with aiofiles.open(save_to + "/readme.md", "w", encoding="utf-8") as file:
             await file.write(content)
 
@@ -423,7 +424,7 @@ class MainWindow(QMainWindow):
             async with aiofiles.open(save_to + "/comments.json", "w") as file:
                 await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
         except:
-            self.logger.warning(f"{topic_id} 评论下载失败")
+            self.logger.warning(f"{metadata['topic_id']} 评论下载失败")
 
         if metadata["lang"] == "cpp":
             self.logger.debug("正在保存 /main.cpp")
@@ -441,31 +442,32 @@ class MainWindow(QMainWindow):
             async with aiofiles.open(save_to + "/main.py", "w", encoding="utf-8") as file:
                 await file.write(data["code"])
 
-        for i in data["assets"]:
-            need_make_dirs = i["saveto"].split("/")
-            need_make_dirs.pop(0)
-            current_path = ""
-            skip = False
-            for j in need_make_dirs:
-                current_path = current_path + "/" + j
-                if not os.path.exists(save_to + current_path):
-                    self.logger.debug(f"正在创建 {current_path} 文件夹")
+        async with ClientSession(headers=HEADER.copy()) as download_session:
+            for i in data["assets"]:
+                need_make_dirs = i["saveto"].split("/")
+                need_make_dirs.pop(0)
+                current_path = ""
+                skip = False
+                for j in need_make_dirs:
+                    current_path = current_path + "/" + j
+                    if not os.path.exists(save_to + current_path):
+                        self.logger.debug(f"正在创建 {current_path} 文件夹")
 
-                    try:
-                        os.mkdir(save_to + current_path)
-                    except:
-                        self.logger.format_exc()
-                        skip = True
-                        break
-            if skip:
-                continue
-            try:
-                self.logger.debug(f"正在下载 {i['path']}")
-                async with self.session.get(i["url"]) as response:
-                    async with aiofiles.open(save_to + i["path"], "wb") as file:
-                        await file.write(await response.content.read())
-            except:
-                self.logger.format_exc()
+                        try:
+                            os.mkdir(save_to + current_path)
+                        except:
+                            self.logger.format_exc()
+                            skip = True
+                            break
+                if skip:
+                    continue
+                try:
+                    self.logger.debug(f"正在下载 {i['path']}")
+                    async with download_session.get(i["url"]) as response:
+                        async with aiofiles.open(save_to + i["path"], "wb") as file:
+                            await file.write(await response.content.read())
+                except:
+                    self.logger.format_exc()
 
     async def _fetch_projects_list(self, user: int) -> list[str]:
         if not self.session:
@@ -503,14 +505,20 @@ class MainWindow(QMainWindow):
         projects_list: list[str] = []
 
         if self.type_normal_checkbox.isChecked():
-            projects_list.extend(await self.__fetch_my_projects_part("projects", "normal"))
-            projects_list.extend(await self.__fetch_my_projects_part("python", "normal"))
-            projects_list.extend(await self.__fetch_my_projects_part("compilers", "normal"))
+            if self.lang_scratch_checkbox.isChecked():
+                projects_list.extend(await self.__fetch_my_projects_part("projects", "normal"))
+            if self.lang_python_checkbox.isChecked() or self.lang_webpy_checkbox.isChecked():
+                projects_list.extend(await self.__fetch_my_projects_part("python", "normal"))
+            if self.lang_cpp_checkbox.isChecked():
+                projects_list.extend(await self.__fetch_my_projects_part("compilers", "normal"))
 
         if self.type_homework_checkbox.isChecked():
-            projects_list.extend(await self.__fetch_my_projects_part("projects", "normal"))
-            projects_list.extend(await self.__fetch_my_projects_part("python", "homework"))
-            projects_list.extend(await self.__fetch_my_projects_part("compilers", "homework"))
+            if self.lang_scratch_checkbox.isChecked():
+                projects_list.extend(await self.__fetch_my_projects_part("projects", "homework"))
+            if self.lang_python_checkbox.isChecked() or self.lang_webpy_checkbox.isChecked():
+                projects_list.extend(await self.__fetch_my_projects_part("python", "homework"))
+            if self.lang_cpp_checkbox.isChecked():
+                projects_list.extend(await self.__fetch_my_projects_part("compilers", "homework"))
 
         return projects_list
 
