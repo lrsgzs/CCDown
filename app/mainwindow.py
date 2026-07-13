@@ -5,10 +5,11 @@ from qasync import asyncSlot, asyncClose
 
 from asyncio import Semaphore, gather
 from aiohttp import ClientSession
+from zipstream import AioZipStream
 import aiofiles
 
 from app.api import ProjectAPI, CommentsAPI
-from app.utils import get_pid_from_url, Logger, get_topic_id_from_url
+from app.utils import Logger, get_topic_id_from_url
 from app.constants import USER_AGENT, USE_WEBVIEW, DOWNLOAD_ASSETS_THREADS
 from app.typings import ProjectInfo
 
@@ -21,6 +22,7 @@ else:
 
     login = login_by_legacy
 
+import shutil
 import json
 import os
 
@@ -465,6 +467,23 @@ lang: {metadata['lang']}
                 continue
             tasks.append(self._download_task(semaphore, save_to, i["path"], i["url"]))
         await gather(*tasks)
+
+        if metadata["lang"] == "scratch":
+            self.logger.debug("正在压缩 sb3 文件")
+
+            dirname = save_to + "/content"
+            file_list = os.listdir(dirname)
+            files = [
+                {"file": dirname + "/" + file} for file in file_list
+            ]
+
+            aiozip = AioZipStream(files, chunksize=32768)
+            async with aiofiles.open(save_to + "/project.sb3", "wb") as file:
+                async for chunk in aiozip.stream():
+                    await file.write(chunk)
+
+            self.logger.debug("正在删除临时用 content 目录")
+            shutil.rmtree(save_to + "/content")
 
     async def _download_task(self, semaphore: Semaphore, saveto: str, path: str, url: str) -> None:
         async with semaphore:

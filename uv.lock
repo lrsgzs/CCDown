@@ -91,6 +91,15 @@ wheels = [
 ]
 
 [[package]]
+name = "aiozipstream"
+version = "0.4"
+source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
+sdist = { url = "https://mirrors.aliyun.com/pypi/packages/0f/1b/97b8d72faeb6cd6b44c23fdc45d054b00366ce153896e76e375e63f80a68/aiozipstream-0.4.tar.gz", hash = "sha256:ccc5cec35c2580b8a13185c916b1581bfcb4278ddf6ea3f7f834b6c9c47d6c61" }
+wheels = [
+    { url = "https://mirrors.aliyun.com/pypi/packages/43/32/942919e4bc56894416ad78e65d4d06434f388e28ef2740d2176e5db5e010/aiozipstream-0.4-py2.py3-none-any.whl", hash = "sha256:a58bad8c75aba319c07bd3d817da7caec7417c1eb4f4c692e00b173fb9ded9c6" },
+]
+
+[[package]]
 name = "attrs"
 version = "26.1.0"
 source = { registry = "https://mirrors.aliyun.com/pypi/simple/" }
@@ -106,6 +115,7 @@ source = { virtual = "." }
 dependencies = [
     { name = "aiofiles" },
     { name = "aiohttp" },
+    { name = "aiozipstream" },
     { name = "pyside6" },
     { name = "qasync" },
     { name = "sqlalchemy" },
@@ -115,6 +125,7 @@ dependencies = [
 requires-dist = [
     { name = "aiofiles", specifier = "~=25.1.0" },
     { name = "aiohttp", specifier = "~=3.14.1" },
+    { name = "aiozipstream", specifier = ">=0.4" },
     { name = "pyside6", specifier = "~=6.11.1" },
     { name = "qasync", specifier = "~=0.28.0" },
     { name = "sqlalchemy", specifier = ">=2.0.51" },
