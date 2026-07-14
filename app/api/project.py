@@ -35,7 +35,7 @@ class ProjectAPI(object):
         for target in project_json["targets"]:
             target_assets = target["costumes"] + target["sounds"]
             for asset in target_assets:
-                filename = asset["md5ext"]
+                filename = asset.get("md5ext", asset["assetId"] + asset["dataFormat"])
                 assets.append(AssetInfo(url=f"https://static{randint(0, 11)}.xesimg.com/"
                                             f"hufu-code/common/mit/{filename}",
                                         saveto="/content",
