@@ -317,8 +317,15 @@ class MainWindow(QMainWindow):
             self.submit_user_button.setEnabled(True)
             return
 
-        uid = int(link.split("code.xueersi.com/space/")[1].split("?")[0])
-        await self._save_projects(await self._fetch_projects_list(uid))
+        try:
+            try:
+                uid = int(link)
+            except ValueError:
+                uid = int(link.split("code.xueersi.com/space/")[1].split("?")[0])
+        except:
+            QMessageBox.critical(self, "错误", "错误的空间链接")
+        else:
+            await self._save_projects(await self._fetch_projects_list(uid))
 
         self.submit_user_button.setEnabled(True)
 

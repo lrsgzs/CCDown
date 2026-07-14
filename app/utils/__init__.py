@@ -25,8 +25,14 @@ def get_topic_id_from_url(url: str) -> str:
             "cpp": "CC",
         }.get(lang_type, "CU")
         return prefix + "_" + pid
+    elif url.split("_")[0] in ["CS", "CP", "CC", "CU"]:
+        return url
     else:
-        return "CU_0"
+        try:
+            pid = int(url)
+        except ValueError:
+            return "CU_0"
+        return f"CU_{pid}"
 
 
 def get_tree_from_dict(origin_assets: dict, current_path: str, assets: list[AssetInfo]):
