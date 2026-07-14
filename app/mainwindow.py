@@ -267,13 +267,6 @@ class MainWindow(QMainWindow):
 
         self.submit_button.setEnabled(False)
 
-        save_to = QFileDialog.getExistingDirectory(self, "在何处保存作品？")
-        if not save_to:
-            self.logger.error("未选择保存位置")
-            QMessageBox.critical(self, "错误", "未选择保存位置")
-            self.submit_button.setEnabled(True)
-            return
-
         pid = get_topic_id_from_url(link)
         if pid == "CP_0":
             self.logger.error("错误的作品链接:" + link)
@@ -372,6 +365,7 @@ class MainWindow(QMainWindow):
 
         projects_data: list[ProjectInfo] = []
         failed_projects: list[str] = []
+        comment_failed_projects: list[str] = []
         for topic_id in projects:
             try:
                 pid = int(topic_id.split("_")[1])
@@ -391,24 +385,37 @@ class MainWindow(QMainWindow):
         self.current_project_label.setText(f"当前项目(0/{total})：无")
         for i, data in enumerate(projects_data):
             try:
-                self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data['metadata']['name']}")
+                status = self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data['metadata']['name']}")
                 await self._save_project(save_to, data)
                 self.logger.info(f"{data['metadata']['topic_id']} 下载完毕")
+                if status:
+                    comment_failed_projects.append(data["metadata"]["topic_id"])
             except:
-                failed_projects.append(data['metadata']['topic_id'])
+                failed_projects.append(data["metadata"]["topic_id"])
                 self.logger.error(f"{data['metadata']['topic_id']} 下载失败")
                 self.logger.format_exc()
 
-        if (count := len(failed_projects)) > 0:
-            self.logger.info(f"下载中出现错误，成功{total - count}个项目，失败{count}个项目：")
-            self.logger.info(failed_projects)
-            QMessageBox.warning(self, "警告",
-                                f"下载完毕，成功{total - count}个项目，失败{count}个项目\n{failed_projects}")
+        count = len(failed_projects)
+        comment_count = len(comment_failed_projects)
+        if count > 0 or comment_count > 0:
+            text = (f"下载完毕，成功{total - count}个项目，失败{count}个项目：\n{failed_projects}\n"
+                    f"评论下载失败{comment_count}个项目：{comment_failed_projects}")
+            self.logger.warning(text)
+
+            message_box = QMessageBox()
+            message_box.setIcon(QMessageBox.Icon.Warning)
+            message_box.setWindowTitle("警告")
+            message_box.setText(text)
+            message_box.addButton("复制并关闭", QMessageBox.ButtonRole.ActionRole)
+            message_box.addButton("确定", QMessageBox.ButtonRole.AcceptRole)
+            status = message_box.exec()
+            if status == 2:
+                QApplication.clipboard().setText(text)
         else:
             self.logger.info(f"下载完毕，共{total}个项目")
             QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
 
-    async def _save_project(self, save_to: str, data: ProjectInfo):
+    async def _save_project(self, save_to: str, data: ProjectInfo) -> bool:
         if not self.session:
             raise RuntimeError("Session not initialized")
 
@@ -427,7 +434,7 @@ class MainWindow(QMainWindow):
             os.mkdir(save_to)
         elif self.skip_downloaded_projects_checkbox.isChecked():
             self.logger.debug("已下载，跳过")
-            return
+            return True
 
         self.logger.debug("正在保存 /metadata.json")
         async with aiofiles.open(save_to + "/metadata.json", "w", encoding="utf-8") as file:
@@ -460,12 +467,14 @@ lang: {metadata['lang']}
                 async with aiofiles.open(save_to + "/" + thumbnail_filename, "wb") as file:
                     await file.write(await response.content.read())
 
+        comment_failed = False
         try:
             self.logger.debug("正在保存 /comments.json")
             comments = await self.comments_api.get_comments(metadata["topic_id"])
             async with aiofiles.open(save_to + "/comments.json", "w") as file:
                 await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
         except:
+            comment_failed = True
             self.logger.warning(f"{metadata['topic_id']} 评论下载失败")
 
         if metadata["lang"] == "cpp":
@@ -523,6 +532,8 @@ lang: {metadata['lang']}
 
             self.logger.debug("正在删除临时用 content 目录")
             shutil.rmtree(save_to + "/content")
+
+        return comment_failed
 
     async def _download_task(self, semaphore: Semaphore, saveto: str, path: str, url: str) -> None:
         async with semaphore:
