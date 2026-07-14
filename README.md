@@ -11,6 +11,8 @@
 > 悲剧并非终结，而是希望的起始。——爱莉希雅
 > 
 > In memory of the old days of Xueersi Coding.
+> 
+> 再见啦 xes coding 今天我将要远航（
 
 ## 功能
 
