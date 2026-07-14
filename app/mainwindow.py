@@ -268,7 +268,7 @@ class MainWindow(QMainWindow):
         self.submit_button.setEnabled(False)
 
         pid = get_topic_id_from_url(link)
-        if pid == "CP_0":
+        if pid == "CU_0":
             self.logger.error("错误的作品链接:" + link)
             QMessageBox.critical(self, "错误", "错误的作品链接:\n" + link)
 
