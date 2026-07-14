@@ -121,6 +121,7 @@ with open("output.json", "w", encoding="utf-8") as file:
     json.dump(projects, file, ensure_ascii=False, indent=4)
 
 engine = create_engine("sqlite:///output.db")
+Base.metadata.drop_all(engine)
 Base.metadata.create_all(engine)
 
 
@@ -148,7 +149,6 @@ def create_comment(session: Session, data: dict, parent_id: int | None = None):
         created_at=parse_datetime(data["created_at"]),
     )
     session.add(comment)
-    session.flush()
 
     if "reply_list" in data and data["reply_list"]:
         children = data["reply_list"].get("data", [])
@@ -193,7 +193,6 @@ with Session(engine) as session:
             published_at=parse_datetime(metadata["published_at"]),
         )
         session.add(project)
-        session.flush()
 
         comments_path = info["path"] + "/comments.json"
         if not os.path.exists(comments_path):
