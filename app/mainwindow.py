@@ -426,6 +426,9 @@ class MainWindow(QMainWindow):
         if not self.session:
             raise RuntimeError("Session not initialized")
 
+        if not self.comments_api:
+            raise RuntimeError("CommentsAPI not initialized")
+
         metadata = data["metadata"]
         uid: int = metadata["id"]
 
@@ -543,6 +546,9 @@ lang: {metadata['lang']}
         return comment_failed
 
     async def _download_task(self, semaphore: Semaphore, saveto: str, path: str, url: str) -> None:
+        if not self.session:
+            raise RuntimeError("Session not initialized")
+
         async with semaphore:
             try:
                 async with self.session.get(url) as response:
