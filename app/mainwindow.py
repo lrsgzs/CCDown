@@ -10,7 +10,7 @@ import aiofiles
 
 from app.api import ProjectAPI, CommentsAPI
 from app.utils import Logger, get_topic_id_from_url
-from app.constants import USER_AGENT, DOWNLOAD_ASSETS_THREADS
+from app.constants import USER_AGENT
 from app.typings import ProjectInfo
 
 import shutil
@@ -72,30 +72,6 @@ class MainWindow(QMainWindow):
         description_label.setFont(description_font)
         self.root_layout.addWidget(description_label)
 
-        cookie_group = QGroupBox("cookie 配置")
-        self.root_layout.addWidget(cookie_group)
-        cookie_group_layout = QFormLayout()
-        cookie_group.setLayout(cookie_group_layout)
-
-        cookit_input_layout = QHBoxLayout()
-        cookie_group_layout.addRow("cookie:", cookit_input_layout)
-        self.cookie_input = QLineEdit()
-        self.cookie_input.setReadOnly(True)
-        cookit_input_layout.addWidget(self.cookie_input)
-        self.get_cookit_button = QPushButton("获取 cookie")
-        self.get_cookit_button.clicked.connect(self.login)
-        cookit_input_layout.addWidget(self.get_cookit_button)
-
-        login_way_layout = QHBoxLayout()
-        cookie_group_layout.addRow("获取方式:", login_way_layout)
-        self.login_by_legacy_radio = QRadioButton("API 登录(推荐!!!)")
-        self.login_by_legacy_radio.setChecked(True)
-        login_way_layout.addWidget(self.login_by_legacy_radio)
-        self.login_by_webview_radio = QRadioButton("WebView")
-        login_way_layout.addWidget(self.login_by_webview_radio)
-        self.login_by_manual_radio = QRadioButton("手动输入")
-        login_way_layout.addWidget(self.login_by_manual_radio)
-
         url_group = QGroupBox("爬取单个作品文件")
         self.root_layout.addWidget(url_group)
         url_group_layout = QVBoxLayout()
@@ -135,7 +111,31 @@ class MainWindow(QMainWindow):
         self.fetch_all_button.clicked.connect(self.save_all_project)
         user_group_layout.addWidget(self.fetch_all_button)
 
-        config_group = QGroupBox("配置")
+        cookie_group = QGroupBox("cookie 配置")
+        self.root_layout.addWidget(cookie_group)
+        cookie_group_layout = QFormLayout()
+        cookie_group.setLayout(cookie_group_layout)
+
+        cookit_input_layout = QHBoxLayout()
+        cookie_group_layout.addRow("cookie:", cookit_input_layout)
+        self.cookie_input = QLineEdit()
+        self.cookie_input.setReadOnly(True)
+        cookit_input_layout.addWidget(self.cookie_input)
+        self.get_cookit_button = QPushButton("获取 cookie")
+        self.get_cookit_button.clicked.connect(self.login)
+        cookit_input_layout.addWidget(self.get_cookit_button)
+
+        login_way_layout = QHBoxLayout()
+        cookie_group_layout.addRow("获取方式:", login_way_layout)
+        self.login_by_legacy_radio = QRadioButton("API 登录(推荐!!!)")
+        self.login_by_legacy_radio.setChecked(True)
+        login_way_layout.addWidget(self.login_by_legacy_radio)
+        self.login_by_webview_radio = QRadioButton("WebView")
+        login_way_layout.addWidget(self.login_by_webview_radio)
+        self.login_by_manual_radio = QRadioButton("手动输入")
+        login_way_layout.addWidget(self.login_by_manual_radio)
+
+        config_group = QGroupBox("下载配置")
         self.root_layout.addWidget(config_group)
         config_group_layout = QFormLayout()
         config_group.setLayout(config_group_layout)
@@ -183,9 +183,18 @@ class MainWindow(QMainWindow):
         status_layout.addWidget(self.status_removed_checkbox)
 
         download_options_layout = QHBoxLayout()
-        config_group_layout.addRow("下载选项:", download_options_layout)
+        config_group_layout.addRow("其他选项:", download_options_layout)
         self.skip_downloaded_projects_checkbox = QCheckBox("跳过已下载项目")
         download_options_layout.addWidget(self.skip_downloaded_projects_checkbox)
+
+        threads_options_layout = QHBoxLayout()
+        config_group_layout.addRow("", threads_options_layout)
+        download_threads_label = QLabel("素材下载线程数:")
+        threads_options_layout.addWidget(download_threads_label)
+        self.download_threads = QSpinBox()
+        self.download_threads.setRange(1, 16)
+        self.download_threads.setValue(8)
+        threads_options_layout.addWidget(self.download_threads)
 
         tip_label = QLabel("XesCoding 已关闭评论功能。暂无法下载评论。")
         self.root_layout.addWidget(tip_label)
@@ -508,7 +517,7 @@ lang: {metadata['lang']}
                 await file.write(data["code"])
 
         tasks = []
-        semaphore = Semaphore(DOWNLOAD_ASSETS_THREADS)
+        semaphore = Semaphore(self.download_threads.value())
         for i in data["assets"]:
             need_make_dirs = i["saveto"].split("/")
             need_make_dirs.pop(0)
