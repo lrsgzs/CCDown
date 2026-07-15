@@ -1,5 +1,8 @@
-from sqlalchemy import String, Text, ForeignKey, create_engine, DateTime
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship, Session
+from sqlalchemy import String, Text, ForeignKey, DateTime
+from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+import asyncio
+import aiofiles
 
 from typing import TypedDict
 from datetime import datetime
@@ -114,18 +117,15 @@ def parse_datetime(dt_str: str) -> datetime:
     return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
 
 
-path = "/home/lrs2187/Projects/ccdown/projects/"
+# path = "/home/lrs2187/Projects/ccdown/projects/"
+path = "/home/lrs2187/xes-backup/ins-creations-archive/"
 projects = build_list(path)
 
 with open("output.json", "w", encoding="utf-8") as file:
     json.dump(projects, file, ensure_ascii=False, indent=4)
 
-engine = create_engine("sqlite:///output.db")
-Base.metadata.drop_all(engine)
-Base.metadata.create_all(engine)
 
-
-def create_comment(session: Session, data: dict, parent_id: int | None = None):
+def create_comment(session: AsyncSession, data: dict, parent_id: int | None = None):
     comment = Comment(
         id=data["id"],
         parent_id=parent_id,
@@ -158,54 +158,66 @@ def create_comment(session: Session, data: dict, parent_id: int | None = None):
     return comment
 
 
-start_time = time.time()
-with Session(engine) as session:
-    for info in projects:
-        with open(info["path"] + "/metadata.json", "r", encoding="utf-8") as file:
-            metadata = json.load(file)
+engine = create_async_engine("sqlite+aiosqlite:///output.db")
 
-        project = Project(
-            topic_id=metadata["topic_id"],
 
-            name=metadata["name"],
-            description=metadata["description"],
-            tags=metadata["tags"],
+async def main():
+    start_time = time.time()
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+        await conn.run_sync(Base.metadata.create_all)
 
-            category=metadata["category"],
-            type=metadata["type"],
-            project_type=metadata["project_type"],
-            lang=metadata["lang"],
-            version=metadata["version"],
+    async_session = async_sessionmaker(engine, expire_on_commit=False)
+    async with async_session() as session:
+        async with session.begin():
+            for info in projects:
+                async with aiofiles.open(info["path"] + "/metadata.json", "r", encoding="utf-8") as file:
+                    metadata = json.loads(await file.read())
 
-            user_id=metadata["user_id"],
-            username=metadata["username"],
-            user_avatar=metadata["user_avatar"],
+                project = Project(
+                    topic_id=metadata["topic_id"],
 
-            views=metadata["views"],
-            likes=metadata["likes"],
-            unlikes=metadata["unlikes"],
-            comments=metadata["comments"],
-            source_code_views=metadata["source_code_views"],
+                    name=metadata["name"],
+                    description=metadata["description"],
+                    tags=metadata["tags"],
 
-            created_at=parse_datetime(metadata["created_at"]),
-            updated_at=parse_datetime(metadata["updated_at"]),
-            modified_at=parse_datetime(metadata["modified_at"]),
-            published_at=parse_datetime(metadata["published_at"]),
-        )
-        session.add(project)
+                    category=metadata["category"],
+                    type=metadata["type"],
+                    project_type=metadata["project_type"],
+                    lang=metadata["lang"],
+                    version=metadata["version"],
 
-        comments_path = info["path"] + "/comments.json"
-        if not os.path.exists(comments_path):
-            continue
+                    user_id=metadata["user_id"],
+                    username=metadata["username"],
+                    user_avatar=metadata["user_avatar"],
 
-        with open(comments_path, "r", encoding="utf-8") as file:
-            comments_info = json.load(file)
-        for comment_data in comments_info:
-            create_comment(session, comment_data, parent_id=None)
+                    views=metadata["views"],
+                    likes=metadata["likes"],
+                    unlikes=metadata["unlikes"],
+                    comments=metadata["comments"],
+                    source_code_views=metadata["source_code_views"],
 
-    session.commit()
-end_time = time.time()
+                    created_at=parse_datetime(metadata["created_at"]),
+                    updated_at=parse_datetime(metadata["updated_at"]),
+                    modified_at=parse_datetime(metadata["modified_at"]),
+                    published_at=parse_datetime(metadata["published_at"]),
+                )
+                session.add(project)
 
-engine.dispose()
+                comments_path = info["path"] + "/comments.json"
+                if not os.path.exists(comments_path):
+                    continue
 
-print(end_time - start_time)
+                async with aiofiles.open(comments_path, "r", encoding="utf-8") as file:
+                    comments_info = json.loads(await file.read())
+                for comment_data in comments_info:
+                    create_comment(session, comment_data, parent_id=None)
+
+            await session.commit()
+    end_time = time.time()
+
+    await engine.dispose()
+
+    print(end_time - start_time)
+
+asyncio.run(main())

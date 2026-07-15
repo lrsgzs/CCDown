@@ -75,6 +75,29 @@ class MainWindow(QMainWindow):
         download_tab = QTabWidget()
         self.root_layout.addWidget(download_tab)
 
+        view_group = QWidget()
+        download_tab.addTab(view_group, "查看作品")
+        view_group_layout = QVBoxLayout()
+        view_group.setLayout(view_group_layout)
+
+        data_folder_layout = QHBoxLayout()
+        view_group_layout.addLayout(data_folder_layout)
+        data_folder_label = QLabel("项目数据目录:")
+        data_folder_layout.addWidget(data_folder_label)
+        self.data_folder_input = QLineEdit()
+        self.data_folder_input.textChanged.connect(self.data_folder_input_text_changed)
+        data_folder_layout.addWidget(self.data_folder_input)
+        self.data_folder_select = QPushButton("选择路径...")
+        self.data_folder_select.clicked.connect(self.select_data_folder)
+        data_folder_layout.addWidget(self.data_folder_select)
+
+        self.build_cache_button = QPushButton("构建/重建项目数据缓存")
+        self.build_cache_button.clicked.connect(self.build_cache)
+        view_group_layout.addWidget(self.build_cache_button)
+        self.start_viewer_button = QPushButton("启动查看器")
+        self.start_viewer_button.clicked.connect(self.start_viewer)
+        view_group_layout.addWidget(self.start_viewer_button)
+
         url_group = QWidget()
         download_tab.addTab(url_group, "爬取单个作品文件")
         url_group_layout = QVBoxLayout()
@@ -110,7 +133,7 @@ class MainWindow(QMainWindow):
         self.submit_user_button.clicked.connect(self.save_user_projects)
         user_group_layout.addWidget(self.submit_user_button)
 
-        self.fetch_all_button = QPushButton("🔥一键爬取我的所有作品🔥")
+        self.fetch_all_button = QPushButton("一键爬取我的所有作品")
         self.fetch_all_button.clicked.connect(self.save_all_project)
         user_group_layout.addWidget(self.fetch_all_button)
 
@@ -214,7 +237,7 @@ class MainWindow(QMainWindow):
 
     def config_widgets(self):
         self.logger.info("正在配置控件")
-        self.cookie_input.clear()
+        self.data_folder_input.setText(self.config["data_path"])
         self.cookie_input.setText(self.config['cookie'])
 
     @asyncClose
@@ -239,18 +262,44 @@ class MainWindow(QMainWindow):
             file.close()
         except FileNotFoundError:
             self.logger.info("配置文件不存在，正在创建")
-            self.config = {"cookie": ""}
+            self.config = {"cookie": "", "data_path": ""}
             self.save_config()
         else:
             self.logger.info("正在读取配置文件")
             with open("data/config.json", "r", encoding="utf-8") as file:
                 self.config = json.load(file)
+
+            if self.config.get("cookie") is None:
+                self.config["cookie"] = ""
+            if self.config.get("data_path") is None:
+                self.config["data_path"] = ""
         self.config_widgets()
 
     def save_config(self):
         self.logger.info("正在保存配置文件")
         with open("data/config.json", "w", encoding="utf-8") as file:
             json.dump(self.config, file)
+
+    def data_folder_input_text_changed(self, text: str):
+        self.config["data_path"] = text
+        self.save_config()
+
+    def select_data_folder(self):
+        path = QFileDialog.getExistingDirectory(self, "在何处加载作品？")
+        if not path:
+            self.logger.error("未选择加载位置")
+            QMessageBox.critical(self, "错误", "未选择加载位置")
+            return
+
+        self.config["data_path"] = path
+        self.data_folder_input.setText(self.config["data_path"])
+        self.save_config()
+
+    def build_cache(self):
+        QMessageBox.information(self, "提示", "Coming soon~")
+
+    def start_viewer(self):
+        QMessageBox.information(self, "提示", "Coming soon~")
 
     def login(self):
         self.logger.info("尝试登录")
