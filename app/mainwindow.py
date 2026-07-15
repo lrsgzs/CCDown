@@ -187,6 +187,9 @@ class MainWindow(QMainWindow):
         self.skip_downloaded_projects_checkbox = QCheckBox("跳过已下载项目")
         download_options_layout.addWidget(self.skip_downloaded_projects_checkbox)
 
+        tip_label = QLabel("XesCoding 已关闭评论功能。暂无法下载评论。")
+        self.root_layout.addWidget(tip_label)
+
         self.current_project_label = QLabel("当前项目(0/0)：无")
         self.root_layout.addWidget(self.current_project_label)
 
@@ -406,7 +409,8 @@ class MainWindow(QMainWindow):
         comment_count = len(comment_failed_projects)
         if count > 0 or comment_count > 0:
             text = (f"下载完毕，成功{total - count}个项目，失败{count}个项目：\n{failed_projects}\n"
-                    f"评论下载失败{comment_count}个项目：{comment_failed_projects}")
+                    f"评论下载已移除。")
+            # f"评论下载失败{comment_count}个项目：{comment_failed_projects}"
             self.logger.warning(text)
 
             message_box = QMessageBox()
@@ -420,7 +424,7 @@ class MainWindow(QMainWindow):
                 QApplication.clipboard().setText(text)
         else:
             self.logger.info(f"下载完毕，共{total}个项目")
-            QMessageBox.information(self, "成功", f"下载完成，共{total}个项目")
+            QMessageBox.information(self, "成功", f"下载完成，共{total}个项目。评论下载已移除。")
 
     async def _save_project(self, save_to: str, data: ProjectInfo) -> bool:
         if not self.session:
@@ -478,14 +482,14 @@ lang: {metadata['lang']}
                     await file.write(await response.content.read())
 
         comment_failed = False
-        try:
-            self.logger.debug("正在保存 /comments.json")
-            comments = await self.comments_api.get_comments(metadata["topic_id"])
-            async with aiofiles.open(save_to + "/comments.json", "w") as file:
-                await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
-        except:
-            comment_failed = True
-            self.logger.warning(f"{metadata['topic_id']} 评论下载失败")
+        # try:
+        #     self.logger.debug("正在保存 /comments.json")
+        #     comments = await self.comments_api.get_comments(metadata["topic_id"])
+        #     async with aiofiles.open(save_to + "/comments.json", "w") as file:
+        #         await file.write(json.dumps(comments, ensure_ascii=False, indent=4))
+        # except:
+        #     comment_failed = True
+        #     self.logger.warning(f"{metadata['topic_id']} 评论下载失败")
 
         if metadata["lang"] == "cpp":
             self.logger.debug("正在保存 /main.cpp")
