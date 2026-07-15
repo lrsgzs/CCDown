@@ -3,7 +3,7 @@
 
 > ```
 > Welcome back to Xueersi Coding!
-> Wake up. Internal workers are destroying the community which has a valuable memory of us.
+> Wake up. Internal employee are destroying the community which has a valuable memory of us.
 > Go backup your project. And watch the ending of the community and our hope of it.
 > That's why we made the tool 'CCDown'.
 > ```
