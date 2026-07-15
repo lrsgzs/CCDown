@@ -3,6 +3,7 @@ from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 from qasync import asyncSlot, asyncClose
 
+from sqlalchemy.ext.asyncio import create_async_engine
 from asyncio import Semaphore, gather
 from aiohttp import ClientSession
 from zipstream import AioZipStream
@@ -12,6 +13,7 @@ from app.api import ProjectAPI, CommentsAPI
 from app.utils import Logger, get_topic_id_from_url
 from app.constants import USER_AGENT
 from app.typings import ProjectInfo
+from app.database import build_db_cache
 
 import shutil
 import json
@@ -295,8 +297,24 @@ class MainWindow(QMainWindow):
         self.data_folder_input.setText(self.config["data_path"])
         self.save_config()
 
-    def build_cache(self):
-        QMessageBox.information(self, "提示", "Coming soon~")
+    @asyncSlot()
+    async def build_cache(self):
+        self.build_cache_button.setEnabled(False)
+        engine = create_async_engine("sqlite+aiosqlite:///data/cache.db")
+
+        try:
+            self.logger.info("尝试构建缓存")
+            await build_db_cache(engine, self.config["data_path"])
+        except:
+            self.logger.error("缓存构建失败")
+            self.logger.format_exc()
+            QMessageBox.critical(self, "错误", "缓存构建失败")
+        else:
+            self.logger.info("缓存构建成功")
+            QMessageBox.information(self, "提示", "缓存构建成功")
+        finally:
+            await engine.dispose()
+            self.build_cache_button.setEnabled(True)
 
     def start_viewer(self):
         QMessageBox.information(self, "提示", "Coming soon~")
