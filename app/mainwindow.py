@@ -72,8 +72,11 @@ class MainWindow(QMainWindow):
         description_label.setFont(description_font)
         self.root_layout.addWidget(description_label)
 
-        url_group = QGroupBox("爬取单个作品文件")
-        self.root_layout.addWidget(url_group)
+        download_tab = QTabWidget()
+        self.root_layout.addWidget(download_tab)
+
+        url_group = QWidget()
+        download_tab.addTab(url_group, "爬取单个作品文件")
         url_group_layout = QVBoxLayout()
         url_group.setLayout(url_group_layout)
 
@@ -91,8 +94,8 @@ class MainWindow(QMainWindow):
         self.submit_multi_button.clicked.connect(self.save_multi_projects)
         url_group_layout.addWidget(self.submit_multi_button)
 
-        user_group = QGroupBox("爬取单人作品文件")
-        self.root_layout.addWidget(user_group)
+        user_group = QWidget()
+        download_tab.addTab(user_group, "爬取单人作品文件")
         user_group_layout = QVBoxLayout()
         user_group.setLayout(user_group_layout)
 
@@ -111,8 +114,11 @@ class MainWindow(QMainWindow):
         self.fetch_all_button.clicked.connect(self.save_all_project)
         user_group_layout.addWidget(self.fetch_all_button)
 
-        cookie_group = QGroupBox("cookie 配置")
-        self.root_layout.addWidget(cookie_group)
+        config_tab = QTabWidget()
+        self.root_layout.addWidget(config_tab)
+
+        cookie_group = QWidget()
+        config_tab.addTab(cookie_group, "cookie 配置")
         cookie_group_layout = QFormLayout()
         cookie_group.setLayout(cookie_group_layout)
 
@@ -135,8 +141,8 @@ class MainWindow(QMainWindow):
         self.login_by_manual_radio = QRadioButton("手动输入")
         login_way_layout.addWidget(self.login_by_manual_radio)
 
-        config_group = QGroupBox("下载配置")
-        self.root_layout.addWidget(config_group)
+        config_group = QWidget()
+        config_tab.addTab(config_group, "下载配置")
         config_group_layout = QFormLayout()
         config_group.setLayout(config_group_layout)
 
