@@ -2,7 +2,6 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, AsyncEngine, AsyncSession
 import aiofiles
 
 from app.utils import Logger
-from utils import Logger
 from .models import Base, Project, Comment
 
 from typing import TypedDict
