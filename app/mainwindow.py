@@ -1,5 +1,4 @@
 from PySide6.QtCore import *
-from PySide6.QtGui import *
 from PySide6.QtWidgets import *
 from qasync import asyncSlot, asyncClose
 
@@ -9,11 +8,15 @@ from aiohttp import ClientSession
 from zipstream import AioZipStream
 import aiofiles
 
+from amber.core import *
+from amber.widgets import *
+
 from app.api import ProjectAPI, CommentsAPI
 from app.utils import Logger, get_topic_id_from_url
 from app.constants import USER_AGENT
 from app.typings import ProjectInfo
 from app.database import build_db_cache
+from app.config import ConfigModel
 
 import shutil
 import json
@@ -25,222 +28,214 @@ HEADER = {
 }
 
 
+class MainWindowViewModel(AmberObject):
+    project_url: AmberProperty[MainWindowViewModel, str] = ""
+    user_url: AmberProperty[MainWindowViewModel, str] = ""
+
+    build_cache_enabled: AmberProperty[MainWindowViewModel, bool] = True
+    save_project_enabled: AmberProperty[MainWindowViewModel, bool] = True
+    save_multi_projects_enabled: AmberProperty[MainWindowViewModel, bool] = True
+    save_user_projects_enabled: AmberProperty[MainWindowViewModel, bool] = True
+    save_my_projects_enabled: AmberProperty[MainWindowViewModel, bool] = True
+
+    login_by_api_checked: AmberProperty[MainWindowViewModel, bool] = True
+    login_by_webview_checked: AmberProperty[MainWindowViewModel, bool] = False
+    login_by_manual_checked: AmberProperty[MainWindowViewModel, bool] = False
+
+    current_project: AmberProperty[MainWindowViewModel, str] = "当前项目(0/0)：无"
+
+
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.config = {}
+
+        self.logger = Logger("CCDown")
+        self.model = MainWindowViewModel()
+        self.config = ConfigModel()
+        self.load_config()
+
         self.session: ClientSession | None = None
         self.project_api: ProjectAPI | None = None
         self.comments_api: CommentsAPI | None = None
-        self.logger = Logger("CCDown")
 
         self.setWindowTitle("CCDown")
         self.setMinimumWidth(500)
-
         self.setup_ui()
-        self.load_config()
 
         self.logger.info("准备就绪")
 
     async def init_async(self):
         header = HEADER.copy()
-        header["Cookie"] = self.config["cookie"]
+        header["Cookie"] = self.config.cookie()
         self.session = ClientSession(headers=header)
 
-        self.project_api = ProjectAPI(self.config["cookie"])
-        self.comments_api = CommentsAPI(self.config["cookie"])
+        self.project_api = ProjectAPI(self.config.cookie())
+        self.comments_api = CommentsAPI(self.config.cookie())
 
     def setup_ui(self):
         self.logger.info("正在配置 UI")
 
-        self.root_widget = QWidget()
-        self.setCentralWidget(self.root_widget)
-        self.root_layout = QVBoxLayout()
-        self.root_widget.setLayout(self.root_layout)
-
-        spacer = QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding)
-        self.root_layout.addItem(spacer)
-
-        title_label = QLabel("CCDown")
-        title_font = QFont()
-        title_font.setPointSize(30)
-        title_font.setBold(True)
-        title_label.setFont(title_font)
-        self.root_layout.addWidget(title_label)
-
-        description_label = QLabel("为下载完整学而思编程作品而生")
-        description_font = QFont()
-        description_font.setPointSize(12)
-        description_label.setFont(description_font)
-        self.root_layout.addWidget(description_label)
+        self.central_widget = QWidget()
+        self.setCentralWidget(self.central_widget)
+        self.central_widget.setLayout(
+            root_layout := AVBoxLayout()
+            .add(QSpacerItem(0, 0, QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Expanding))
+            .add(ALabel()
+                 .text_property("CCDown")
+                 .font_property(AFont().point_size_property(30).bold_property(True)))
+            .add(ALabel()
+                 .text_property("为下载完整学而思编程作品而生")
+                 .font_property(AFont().point_size_property(12)))
+        )
 
         download_tab = QTabWidget()
-        self.root_layout.addWidget(download_tab)
+        root_layout.addWidget(download_tab)
 
         view_group = QWidget()
         download_tab.addTab(view_group, "查看作品")
-        view_group_layout = QVBoxLayout()
-        view_group.setLayout(view_group_layout)
-
-        data_folder_layout = QHBoxLayout()
-        view_group_layout.addLayout(data_folder_layout)
-        data_folder_label = QLabel("项目数据目录:")
-        data_folder_layout.addWidget(data_folder_label)
-        self.data_folder_input = QLineEdit()
-        self.data_folder_input.textChanged.connect(self.data_folder_input_text_changed)
-        data_folder_layout.addWidget(self.data_folder_input)
-        self.data_folder_select = QPushButton("选择路径...")
-        self.data_folder_select.clicked.connect(self.select_data_folder)
-        data_folder_layout.addWidget(self.data_folder_select)
-
-        self.build_cache_button = QPushButton("构建/重建项目数据缓存")
-        self.build_cache_button.clicked.connect(self.build_cache)
-        view_group_layout.addWidget(self.build_cache_button)
-        self.start_viewer_button = QPushButton("启动查看器")
-        self.start_viewer_button.clicked.connect(self.start_viewer)
-        view_group_layout.addWidget(self.start_viewer_button)
+        view_group.setLayout(
+            AVBoxLayout()
+            .add(AHBoxLayout()
+                 .add(QLabel("项目数据目录:"))
+                 .add(ALineEdit()
+                      .text_property(self.config.data_path))
+                 .add(APushButton()
+                      .text_property("选择路径...")
+                      .clicked_event(lambda s, e: self.select_data_folder())))
+            .add(APushButton()
+                 .text_property("构建/重建项目数据缓存")
+                 .enabled_property(self.model.build_cache_enabled)
+                 .clicked_event(lambda s, e: self.build_cache()))
+            .add(APushButton()
+                 .text_property("启动查看器")
+                 .clicked_event(lambda s, e: self.start_viewer()))
+        )
 
         url_group = QWidget()
         download_tab.addTab(url_group, "爬取单个作品文件")
-        url_group_layout = QVBoxLayout()
-        url_group.setLayout(url_group_layout)
-
-        url_input_layout = QHBoxLayout()
-        url_group_layout.addLayout(url_input_layout)
-        url_input_label = QLabel("URL:")
-        url_input_layout.addWidget(url_input_label)
-        self.url_input = QLineEdit()
-        url_input_layout.addWidget(self.url_input)
-
-        self.submit_button = QPushButton("开始爬取")
-        self.submit_button.clicked.connect(self.save_project)
-        url_group_layout.addWidget(self.submit_button)
-        self.submit_multi_button = QPushButton("爬取多个作品...")
-        self.submit_multi_button.clicked.connect(self.save_multi_projects)
-        url_group_layout.addWidget(self.submit_multi_button)
+        url_group.setLayout(
+            AVBoxLayout()
+            .add(AHBoxLayout()
+                 .add(QLabel("URL:"))
+                 .add(ALineEdit().text_property(self.model.project_url)))
+            .add(APushButton()
+                 .text_property("开始爬取")
+                 .enabled_property(self.model.save_project_enabled)
+                 .clicked_event(lambda s, e: self.save_project()))
+            .add(APushButton()
+                 .text_property("爬取多个作品...")
+                 .enabled_property(self.model.save_multi_projects_enabled)
+                 .clicked_event(lambda s, e: self.save_multi_projects()))
+        )
 
         user_group = QWidget()
         download_tab.addTab(user_group, "爬取单人作品文件")
-        user_group_layout = QVBoxLayout()
-        user_group.setLayout(user_group_layout)
-
-        user_input_layout = QHBoxLayout()
-        user_group_layout.addLayout(user_input_layout)
-        user_input_label = QLabel("作者空间 URL:")
-        user_input_layout.addWidget(user_input_label)
-        self.user_input = QLineEdit()
-        user_input_layout.addWidget(self.user_input)
-
-        self.submit_user_button = QPushButton("开始爬取")
-        self.submit_user_button.clicked.connect(self.save_user_projects)
-        user_group_layout.addWidget(self.submit_user_button)
-
-        self.fetch_all_button = QPushButton("一键爬取我的所有作品")
-        self.fetch_all_button.clicked.connect(self.save_all_project)
-        user_group_layout.addWidget(self.fetch_all_button)
+        user_group.setLayout(
+            AVBoxLayout()
+            .add(AHBoxLayout()
+                 .add(QLabel("作者空间 URL:"))
+                 .add(ALineEdit().text_property(self.model.user_url)))
+            .add(APushButton()
+                 .text_property("开始爬取")
+                 .enabled_property(self.model.save_user_projects_enabled)
+                 .clicked_event(lambda s, e: self.save_user_projects()))
+            .add(APushButton()
+                 .text_property("一键爬取我的所有作品")
+                 .enabled_property(self.model.save_my_projects_enabled)
+                 .clicked_event(lambda s, e: self.save_my_projects()))
+        )
 
         config_tab = QTabWidget()
-        self.root_layout.addWidget(config_tab)
+        root_layout.addWidget(config_tab)
 
         cookie_group = QWidget()
         config_tab.addTab(cookie_group, "cookie 配置")
-        cookie_group_layout = QFormLayout()
-        cookie_group.setLayout(cookie_group_layout)
-
-        cookit_input_layout = QHBoxLayout()
-        cookie_group_layout.addRow("cookie:", cookit_input_layout)
-        self.cookie_input = QLineEdit()
-        self.cookie_input.setReadOnly(True)
-        cookit_input_layout.addWidget(self.cookie_input)
-        self.get_cookit_button = QPushButton("获取 cookie")
-        self.get_cookit_button.clicked.connect(self.login)
-        cookit_input_layout.addWidget(self.get_cookit_button)
-
-        login_way_layout = QHBoxLayout()
-        cookie_group_layout.addRow("获取方式:", login_way_layout)
-        self.login_by_legacy_radio = QRadioButton("API 登录(推荐!!!)")
-        self.login_by_legacy_radio.setChecked(True)
-        login_way_layout.addWidget(self.login_by_legacy_radio)
-        self.login_by_webview_radio = QRadioButton("WebView")
-        login_way_layout.addWidget(self.login_by_webview_radio)
-        self.login_by_manual_radio = QRadioButton("手动输入")
-        login_way_layout.addWidget(self.login_by_manual_radio)
+        cookie_group.setLayout(
+            AFormLayout()
+            .add("cookie:", AHBoxLayout()
+                 .add(ALineEdit()
+                      .readonly_property(True)
+                      .text_property(self.config.cookie))
+                 .add(APushButton()
+                      .text_property("获取 cookie")
+                      .clicked_event(lambda s, e: self.login())))
+            .add("获取方式:", AHBoxLayout()
+                 .add(ARadioButton()
+                      .text_property("API 登录(推荐!!!)")
+                      .checked_property(self.model.login_by_api_checked))
+                 .add(ARadioButton()
+                      .text_property("WebView")
+                      .checked_property(self.model.login_by_webview_checked))
+                 .add(ARadioButton()
+                      .text_property("手动输入")
+                      .checked_property(self.model.login_by_manual_checked)))
+        )
 
         config_group = QWidget()
         config_tab.addTab(config_group, "下载配置")
-        config_group_layout = QFormLayout()
-        config_group.setLayout(config_group_layout)
 
-        type_layout = QHBoxLayout()
-        config_group_layout.addRow("筛选类型:", type_layout)
-        self.type_normal_checkbox = QCheckBox("个人创作")
-        self.type_normal_checkbox.setChecked(True)
-        type_layout.addWidget(self.type_normal_checkbox)
-        self.type_homework_checkbox = QCheckBox("随堂练习")
-        type_layout.addWidget(self.type_homework_checkbox)
+        download_threads = QSpinBox()
+        download_threads.setRange(1, 16)
+        download_threads.setValue(self.config.download_config.download_threads())
+        download_threads.valueChanged.connect(self.config.download_config.download_threads.notify_changed)
 
-        lang_layout = QHBoxLayout()
-        config_group_layout.addRow("筛选语言:", lang_layout)
-        self.lang_scratch_checkbox = QCheckBox("Scratch")
-        self.lang_scratch_checkbox.setChecked(True)
-        lang_layout.addWidget(self.lang_scratch_checkbox)
-        self.lang_python_checkbox = QCheckBox("Python")
-        self.lang_python_checkbox.setChecked(True)
-        lang_layout.addWidget(self.lang_python_checkbox)
-        self.lang_webpy_checkbox = QCheckBox("WebPy")
-        self.lang_webpy_checkbox.setChecked(True)
-        lang_layout.addWidget(self.lang_webpy_checkbox)
-        self.lang_cpp_checkbox = QCheckBox("C++")
-        self.lang_cpp_checkbox.setChecked(True)
-        lang_layout.addWidget(self.lang_cpp_checkbox)
-        self.lang_others_checkbox = QCheckBox("其他?")
-        self.lang_others_checkbox.setChecked(True)
-        self.lang_others_checkbox.setToolTip("真的有吗？")
-        lang_layout.addWidget(self.lang_others_checkbox)
+        config_group.setLayout(
+            AFormLayout()
+            .add("筛选类型:", AHBoxLayout()
+                 .add(ACheckBox()
+                      .text_property("个人创作")
+                      .checked_property(self.config.download_config.type_normal))
+                 .add(ACheckBox()
+                      .text_property("随堂练习")
+                      .checked_property(self.config.download_config.type_homework)))
 
-        status_layout = QHBoxLayout()
-        config_group_layout.addRow("筛选状态:", status_layout)
-        self.status_unpublished_checkbox = QCheckBox("未发布")
-        self.status_unpublished_checkbox.setChecked(True)
-        status_layout.addWidget(self.status_unpublished_checkbox)
-        self.status_judging_checkbox = QCheckBox("审核中")
-        self.status_judging_checkbox.setChecked(True)
-        status_layout.addWidget(self.status_judging_checkbox)
-        self.status_published_checkbox = QCheckBox("已发布")
-        self.status_published_checkbox.setChecked(True)
-        status_layout.addWidget(self.status_published_checkbox)
-        self.status_removed_checkbox = QCheckBox("已下架")
-        self.status_removed_checkbox.setChecked(True)
-        status_layout.addWidget(self.status_removed_checkbox)
+            .add("筛选语言:", AHBoxLayout()
+                 .add(ACheckBox()
+                      .text_property("Scratch")
+                      .checked_property(self.config.download_config.lang_scratch))
+                 .add(ACheckBox()
+                      .text_property("Python")
+                      .checked_property(self.config.download_config.lang_python))
+                 .add(ACheckBox()
+                      .text_property("WebPy")
+                      .checked_property(self.config.download_config.lang_webpy))
+                 .add(ACheckBox()
+                      .text_property("C++")
+                      .checked_property(self.config.download_config.lang_cpp))
+                 .add(ACheckBox()
+                      .text_property("其他?")
+                      .tooltip_property("真的有吗?")
+                      .checked_property(self.config.download_config.lang_others)))
 
-        download_options_layout = QHBoxLayout()
-        config_group_layout.addRow("其他选项:", download_options_layout)
-        self.skip_downloaded_projects_checkbox = QCheckBox("跳过已下载项目")
-        download_options_layout.addWidget(self.skip_downloaded_projects_checkbox)
+            .add("筛选状态:", AHBoxLayout()
+                 .add(ACheckBox()
+                      .text_property("未发布")
+                      .checked_property(self.config.download_config.status_unpublished))
+                 .add(ACheckBox()
+                      .text_property("审核中")
+                      .checked_property(self.config.download_config.status_judging))
+                 .add(ACheckBox()
+                      .text_property("已发布")
+                      .checked_property(self.config.download_config.status_published))
+                 .add(ACheckBox()
+                      .text_property("已下架")
+                      .checked_property(self.config.download_config.status_removed)))
 
-        threads_options_layout = QHBoxLayout()
-        config_group_layout.addRow("", threads_options_layout)
-        download_threads_label = QLabel("素材下载线程数:")
-        threads_options_layout.addWidget(download_threads_label)
-        self.download_threads = QSpinBox()
-        self.download_threads.setRange(1, 16)
-        self.download_threads.setValue(8)
-        threads_options_layout.addWidget(self.download_threads)
+            .add("其他选项:", AHBoxLayout()
+                 .add(ACheckBox()
+                      .text_property("跳过已下载项目")
+                      .checked_property(self.config.download_config.skip_downloaded_projects)))
+            .add("", AHBoxLayout()
+                 .add(QLabel("素材下载线程数:"))
+                 .add(download_threads))
+        )
 
-        tip_label = QLabel("XesCoding 已关闭评论功能。暂无法下载评论。")
-        self.root_layout.addWidget(tip_label)
+        root_layout.add(QLabel("XesCoding 已关闭评论功能。暂无法下载评论。"))
+        root_layout.add(ALabel().text_property(self.model.current_project))
 
-        self.current_project_label = QLabel("当前项目(0/0)：无")
-        self.root_layout.addWidget(self.current_project_label)
-
-        self.status_bar = QStatusBar()
-        self.logger.logEmitted.connect(lambda msg: self.status_bar.showMessage(msg))
-        self.setStatusBar(self.status_bar)
-
-    def config_widgets(self):
-        self.logger.info("正在配置控件")
-        self.data_folder_input.setText(self.config["data_path"])
-        self.cookie_input.setText(self.config['cookie'])
+        status_bar = QStatusBar()
+        self.logger.logEmitted.connect(lambda msg: status_bar.showMessage(msg))
+        self.setStatusBar(status_bar)
 
     @asyncClose
     async def closeEvent(self, event):
@@ -253,6 +248,7 @@ class MainWindow(QMainWindow):
         if self.comments_api:
             await self.comments_api.dispose()
 
+        self.save_config()
         event.accept()
 
     def load_config(self):
@@ -264,26 +260,21 @@ class MainWindow(QMainWindow):
             file.close()
         except FileNotFoundError:
             self.logger.info("配置文件不存在，正在创建")
-            self.config = {"cookie": "", "data_path": ""}
             self.save_config()
         else:
             self.logger.info("正在读取配置文件")
             with open("data/config.json", "r", encoding="utf-8") as file:
-                self.config = json.load(file)
-
-            if self.config.get("cookie") is None:
-                self.config["cookie"] = ""
-            if self.config.get("data_path") is None:
-                self.config["data_path"] = ""
-        self.config_widgets()
+                data = json.load(file)
+            self.config.from_json(data)
 
     def save_config(self):
         self.logger.info("正在保存配置文件")
+        data = self.config.to_json()
         with open("data/config.json", "w", encoding="utf-8") as file:
-            json.dump(self.config, file)
+            json.dump(data, file, indent=4, ensure_ascii=False)
 
     def data_folder_input_text_changed(self, text: str):
-        self.config["data_path"] = text
+        self.config.data_path(text)
         self.save_config()
 
     def select_data_folder(self):
@@ -292,19 +283,17 @@ class MainWindow(QMainWindow):
             self.logger.error("未选择加载位置")
             QMessageBox.critical(self, "错误", "未选择加载位置")
             return
-
-        self.config["data_path"] = path
-        self.data_folder_input.setText(self.config["data_path"])
+        self.config.data_path(path)
         self.save_config()
 
     @asyncSlot()
     async def build_cache(self):
-        self.build_cache_button.setEnabled(False)
+        self.model.build_cache_enabled.set(False)
         engine = create_async_engine("sqlite+aiosqlite:///data/cache.db")
 
         try:
             self.logger.info("尝试构建缓存")
-            await build_db_cache(engine, self.config["data_path"])
+            await build_db_cache(engine, self.config.data_path())
         except:
             self.logger.error("缓存构建失败")
             self.logger.format_exc()
@@ -314,7 +303,7 @@ class MainWindow(QMainWindow):
             QMessageBox.information(self, "提示", "缓存构建成功")
         finally:
             await engine.dispose()
-            self.build_cache_button.setEnabled(True)
+            self.model.build_cache_enabled.set(True)
 
     def start_viewer(self):
         QMessageBox.information(self, "提示", "Coming soon~")
@@ -323,17 +312,17 @@ class MainWindow(QMainWindow):
         self.logger.info("尝试登录")
         QMessageBox.information(self, "提示", "请在即将弹出的窗口进行登录")
 
-        if self.login_by_webview_radio.isChecked():
+        if self.model.login_by_webview_checked.get():
             from app.login.webview import login_by_webview
             cookie = login_by_webview(self)
-        elif self.login_by_manual_radio.isChecked():
+        elif self.model.login_by_manual_checked.get():
             cookie = QInputDialog.getText(self, "提示", "请输入 cookie")[0]
         else:
             from app.login.legacy import login_by_legacy
             cookie = login_by_legacy(self)
 
         if cookie:
-            self.config["cookie"] = cookie
+            self.config.cookie(cookie)
             self.save_config()
             self.logger.info("获取 cookie 成功")
             QMessageBox.information(self, "成功", "成功获取 cookie，请重启程序")
@@ -346,11 +335,12 @@ class MainWindow(QMainWindow):
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
 
-        if not (link := self.url_input.text()):
-            QMessageBox.critical(self, "错误", "未输入作品链接")
-            return
+        self.model.save_project_enabled.set(False)
 
-        self.submit_button.setEnabled(False)
+        if not (link := self.model.project_url.get()):
+            QMessageBox.critical(self, "错误", "未输入作品链接")
+            self.model.save_project_enabled.set(True)
+            return
 
         pid = get_topic_id_from_url(link)
         if pid == "CU_0":
@@ -358,22 +348,21 @@ class MainWindow(QMainWindow):
             QMessageBox.critical(self, "错误", "错误的作品链接:\n" + link)
 
         await self._save_projects([pid])
-
-        self.submit_button.setEnabled(True)
+        self.model.save_project_enabled.set(True)
 
     @asyncSlot()
     async def save_multi_projects(self):
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
 
-        self.submit_multi_button.setEnabled(False)
+        self.model.save_multi_projects_enabled.set(False)
 
         text = QInputDialog.getMultiLineText(self, "提示", "请输入作品链接，一行一个")[0]
         links = text.strip().splitlines()
 
         if len(links) == 0:
             QMessageBox.critical(self, "错误", "未输入作品链接")
-            self.submit_multi_button.setEnabled(True)
+            self.model.save_multi_projects_enabled.set(True)
             return
 
         projects: list[str] = []
@@ -386,20 +375,18 @@ class MainWindow(QMainWindow):
             projects.append(pid)
 
         await self._save_projects(projects)
-
-        self.submit_multi_button.setEnabled(True)
+        self.model.save_multi_projects_enabled.set(True)
 
     @asyncSlot()
     async def save_user_projects(self):
         if not self.project_api:
             raise RuntimeError("ProjectAPI not initialized")
 
-        self.submit_user_button.setEnabled(False)
-
-        link = self.user_input.text()
+        self.model.save_user_projects_enabled.set(False)
+        link = self.model.user_url.get()
         if not link:
             QMessageBox.critical(self, "错误", "未输入作者空间链接")
-            self.submit_user_button.setEnabled(True)
+            self.model.save_user_projects_enabled.set(True)
             return
 
         try:
@@ -412,34 +399,36 @@ class MainWindow(QMainWindow):
         else:
             await self._save_projects(await self._fetch_projects_list(uid))
 
-        self.submit_user_button.setEnabled(True)
+        self.model.save_user_projects_enabled.set(True)
 
     @asyncSlot()
-    async def save_all_project(self):
+    async def save_my_projects(self):
         await self._save_projects(await self._fetch_my_projects_list())
 
     async def _save_projects(self, projects: list[str]):
         def _filter(project: ProjectInfo) -> bool:
+            dc = self.config.download_config
+            
             type_check = {
-                "normal": self.type_normal_checkbox.isChecked(),
-                "homework": self.type_homework_checkbox.isChecked(),
-            }.get(project["metadata"]["type"], self.type_normal_checkbox.isChecked())
+                "normal": dc.type_normal(),
+                "homework": dc.type_homework(),
+            }.get(project["metadata"]["type"], dc.type_normal())
 
             lang_check = {
-                "scratch": self.lang_scratch_checkbox.isChecked(),
-                "python": self.lang_python_checkbox.isChecked(),
-                "webpy": self.lang_webpy_checkbox.isChecked(),
-                "cpp": self.lang_cpp_checkbox.isChecked(),
-            }.get(project["metadata"]["lang"], self.lang_others_checkbox.isChecked())
+                "scratch": dc.lang_scratch(),
+                "python": dc.lang_python(),
+                "webpy": dc.lang_webpy(),
+                "cpp": dc.lang_cpp(),
+            }.get(project["metadata"]["lang"], dc.lang_others())
 
-            if project["metadata"]["removed"] == 1 and self.status_removed_checkbox.isChecked():
+            if project["metadata"]["removed"] == 1 and dc.status_removed():
                 return type_check and lang_check
 
             status_check = {
-                0: self.status_unpublished_checkbox.isChecked(),
-                2: self.status_judging_checkbox.isChecked(),
-                1: self.status_published_checkbox.isChecked(),
-            }.get(project["metadata"]["published"], self.status_published_checkbox.isChecked())
+                0: dc.status_unpublished(),
+                2: dc.status_judging(),
+                1: dc.status_published(),
+            }.get(project["metadata"]["published"], dc.status_unpublished())
 
             return type_check and lang_check and status_check
 
@@ -474,10 +463,10 @@ class MainWindow(QMainWindow):
                 self.logger.format_exc()
 
         total = len(projects_data)
-        self.current_project_label.setText(f"当前项目(0/{total})：无")
+        self.model.current_project.set(f"当前项目(0/{total})：无")
         for i, data in enumerate(projects_data):
             try:
-                status = self.current_project_label.setText(f"当前项目({i + 1}/{total})：{data['metadata']['name']}")
+                status = self.model.current_project.set(f"当前项目({i + 1}/{total})：{data['metadata']['name']}")
                 await self._save_project(save_to, data)
                 self.logger.info(f"{data['metadata']['topic_id']} 下载完毕")
                 if status:
@@ -528,7 +517,7 @@ class MainWindow(QMainWindow):
         self.logger.debug(f"name='{metadata['name']}'，将要保存到 {save_to}")
         if not os.path.exists(save_to):
             os.mkdir(save_to)
-        elif self.skip_downloaded_projects_checkbox.isChecked():
+        elif self.config.download_config.skip_downloaded_projects():
             self.logger.debug("已下载，跳过")
             return True
 
@@ -590,7 +579,7 @@ lang: {metadata['lang']}
                 await file.write(data["code"])
 
         tasks = []
-        semaphore = Semaphore(self.download_threads.value())
+        semaphore = Semaphore(self.config.download_config.download_threads())
         for i in data["assets"]:
             need_make_dirs = i["saveto"].split("/")
             need_make_dirs.pop(0)
@@ -677,22 +666,23 @@ lang: {metadata['lang']}
         if not self.session:
             raise RuntimeError("Session not initialized")
 
+        dc = self.config.download_config
         projects_list: list[str] = []
 
-        if self.type_normal_checkbox.isChecked():
-            if self.lang_scratch_checkbox.isChecked():
+        if dc.type_normal():
+            if dc.lang_scratch():
                 projects_list.extend(await self.__fetch_my_projects_part("projects", "normal"))
-            if self.lang_python_checkbox.isChecked() or self.lang_webpy_checkbox.isChecked():
+            if dc.lang_python() or dc.lang_webpy():
                 projects_list.extend(await self.__fetch_my_projects_part("python", "normal"))
-            if self.lang_cpp_checkbox.isChecked():
+            if dc.lang_cpp():
                 projects_list.extend(await self.__fetch_my_projects_part("compilers", "normal"))
 
-        if self.type_homework_checkbox.isChecked():
-            if self.lang_scratch_checkbox.isChecked():
+        if dc.type_homework():
+            if dc.lang_scratch():
                 projects_list.extend(await self.__fetch_my_projects_part("projects", "homework"))
-            if self.lang_python_checkbox.isChecked() or self.lang_webpy_checkbox.isChecked():
+            if dc.lang_python() or dc.lang_webpy():
                 projects_list.extend(await self.__fetch_my_projects_part("python", "homework"))
-            if self.lang_cpp_checkbox.isChecked():
+            if dc.lang_cpp():
                 projects_list.extend(await self.__fetch_my_projects_part("compilers", "homework"))
 
         return projects_list
