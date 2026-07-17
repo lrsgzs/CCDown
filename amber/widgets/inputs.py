@@ -39,6 +39,7 @@ class ACheckBox(QCheckBox, AObject):
             AmberProperty[ACheckBox, bool](self, "checkable_property", self.isCheckable, self.setCheckable))
         self.checked_property =(
             AmberProperty[ACheckBox, bool](self, "checked_property", self.isChecked, self.setChecked))
+        self.toggled.connect(lambda val: self.checked_property.notify_changed(val))
         self.check_status_property =(
             AmberProperty[ACheckBox, Qt.CheckState](self, "check_status_property", self.checkState, self.setCheckState))
         self.checkStateChanged.connect(lambda val: self.check_status_property.notify_changed(val))

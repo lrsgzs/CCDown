@@ -1,5 +1,5 @@
 from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QFont
 from PySide6.QtWidgets import QWidget, QLabel
 
 from .base import AObject
@@ -16,8 +16,10 @@ class ALabel(QLabel, AObject):
             AmberProperty[ALabel, bool](self, "enabled_property", self.isEnabled, self.setEnabled))
         self.tooltip_property =(
             AmberProperty[ALabel, str](self, "tooltip_property", self.toolTip, self.setToolTip))
-        self.text_property = (
+        self.text_property =(
             AmberProperty[ALabel, str](self, "text_property", self.text, self.setText))
+        self.font_property =(
+            AmberProperty[ALabel, QFont](self, "font_property", self.font, self.setFont))
 
         self.alignment_property =(
             AmberProperty[ALabel, Qt.AlignmentFlag](self, "alignment_property", self.alignment, self.setAlignment))

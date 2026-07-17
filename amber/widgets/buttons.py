@@ -40,6 +40,7 @@ class APushButton(QPushButton, AObject):
             AmberProperty[APushButton, bool](self, "checkable_property", self.isCheckable, self.setCheckable))
         self.checked_property =(
             AmberProperty[APushButton, bool](self, "checked_property", self.isChecked, self.setChecked))
+        self.toggled.connect(lambda val: self.checked_property.notify_changed(val))
 
         # events
         self.clicked_event = AmberEvent[APushButton, ValueEventArg[bool]](self)
@@ -85,6 +86,7 @@ class ARadioButton(QRadioButton, AObject):
             AmberProperty[ARadioButton, bool](self, "checkable_property", self.isCheckable, self.setCheckable))
         self.checked_property =(
             AmberProperty[ARadioButton, bool](self, "checked_property", self.isChecked, self.setChecked))
+        self.toggled.connect(lambda val: self.checked_property.notify_changed(val))
 
         # events
         self.clicked_event = AmberEvent[ARadioButton, ValueEventArg[bool]](self)

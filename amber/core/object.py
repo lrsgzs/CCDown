@@ -13,6 +13,13 @@ class AmberObject(object):
     def __init__(self):
         self.property_changed = AmberEvent[AmberObject, PropertyChangedEventArg](self)
 
+        hints = get_type_hints(self.__class__)
+        for attr_name, attr_type in hints.items():
+            if get_origin(attr_type) is AmberProperty:
+                val = getattr(self, attr_name, None)
+                if val is not None:
+                    setattr(self, attr_name, AmberProperty(self, attr_name, val))
+
     def to_json(self) -> dict:
         """基于类型注解的通用序列化"""
         result = {}
