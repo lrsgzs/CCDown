@@ -95,6 +95,7 @@ async def create_db_project(session: AsyncSession, info: ProjectInfo, metadata: 
         views=metadata["views"],
         likes=metadata["likes"],
         unlikes=metadata["unlikes"],
+        favorites=metadata["favorites"],
         comments=metadata["comments"],
         source_code_views=metadata["source_code_views"],
 

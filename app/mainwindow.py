@@ -17,6 +17,7 @@ from app.constants import USER_AGENT
 from app.typings import ProjectInfo
 from app.database import build_db_cache
 from app.config import ConfigModel
+from app.projects_viewer import ProjectsViewer
 
 import shutil
 import json
@@ -306,7 +307,14 @@ class MainWindow(QMainWindow):
             self.model.build_cache_enabled.set(True)
 
     def start_viewer(self):
-        QMessageBox.information(self, "提示", "Coming soon~")
+        if not os.path.exists("data/cache.db"):
+            QMessageBox.critical(self, "错误", "请先构建缓存！")
+            return
+
+        self.hide()
+        viewer = ProjectsViewer()
+        viewer.exec()
+        self.show()
 
     def login(self):
         self.logger.info("尝试登录")

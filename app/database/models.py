@@ -29,6 +29,7 @@ class Project(Base):
     views: Mapped[int] = mapped_column(default=0)
     likes: Mapped[int] = mapped_column(default=0)
     unlikes: Mapped[int] = mapped_column(default=0)
+    favorites: Mapped[int] = mapped_column(default=0)
     comments: Mapped[int] = mapped_column(default=0)
     source_code_views: Mapped[int] = mapped_column(default=0)
 
