@@ -20,6 +20,8 @@ from .pages.project_info import ProjectInfoWidget
 
 class ProjectsViewerModel(AmberObject):
     project_search: AmberProperty[ProjectsViewerModel, str] = ""
+    comment_search_visible: AmberProperty[ProjectsViewerModel, bool] = False
+    comment_search: AmberProperty[ProjectsViewerModel, str] = ""
 
 
 class ProjectsViewer(QMainWindow):
@@ -63,23 +65,47 @@ class ProjectsViewer(QMainWindow):
                  .editing_finished_event(lambda s, e: self.search_project()))
             .add(treeview := QTreeView())
         )
-        splitter.addWidget(tab := QTabWidget())
+
+        splitter.addWidget(right := QWidget())
+        right.setLayout(
+            AVBoxLayout()
+            .spacing_property(0)
+            .add(AHBoxLayout()
+                 .add(tab_bar := QTabBar())
+                 .add(QSpacerItem(0, 0, QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Minimum))
+                 .add(comment_search := ALineEdit()
+                      .call(ALineEdit.setVisible, False)
+                      .placeholder_text_property("搜索评论...")
+                      .call(ALineEdit.setContentsMargins, QMargins(0, 0, 0, 6))
+                      .maximum_size_property(QSize(256, 16777215)))
+                 .call(AHBoxLayout.setAlignment, tab_bar, Qt.AlignmentFlag.AlignBottom))
+            .add(separator := QFrame(frameShape=QFrame.Shape.HLine, lineWidth=1))
+            .add(container := QStackedWidget())
+        )
+
         splitter.setSizes([3, 7])
+        separator.setMaximumHeight(1)
 
         self.tree_view = treeview
-        self.tab = tab
+        self.tab_bar = tab_bar
+        self.container = container
 
-        self.tree_view.clicked.connect(self.tree_view_clicked)
+        self.tab_bar.addTab("name")
+        self.container.addWidget(QWidget())
+        self.tab_bar.addTab("项目信息")
+        self.container.addWidget(info_widget := ProjectInfoWidget())
+        self.tab_bar.addTab("评论")
+        self.container.addWidget(QWidget())
+        self.tab_bar.currentChanged.connect(self.container.setCurrentIndex)
+        self.tab_bar.currentChanged.connect(lambda index: self.model.comment_search_visible.set(index == 2))
 
-        self.tab.addTab(QWidget(), "name")
-        self.tab.addTab(info_widget := ProjectInfoWidget(), "项目信息")
-        self.tab.addTab(QWidget(), "评论")
         self.info_widget = info_widget
 
-        self.tab.setTabText(0, "???")
-        self.tab.setTabEnabled(0, False)
-        self.tab.setCurrentIndex(1)
-        self.tab.setDocumentMode(True)
+        self.tab_bar.setTabText(0, "???")
+        self.tab_bar.setTabEnabled(0, False)
+        self.tab_bar.setCurrentIndex(1)
+
+        self.model.comment_search_visible.changed += lambda s, e: comment_search.setVisible(e.value)
 
     async def init_async(self):
         self.logger.info("晚加载")
@@ -88,6 +114,7 @@ class ProjectsViewer(QMainWindow):
         users = await self.query_users()
         model = UserProjectTreeModel(users)
         self.tree_view.setModel(model)
+        self.tree_view.selectionModel().currentChanged.connect(self.on_tree_view_selection_changed)
         self.tree_view.expandAll()
 
         header = self.tree_view.header()
@@ -134,7 +161,7 @@ class ProjectsViewer(QMainWindow):
         self.tree_view.expandAll()
 
     @asyncSlot()
-    async def tree_view_clicked(self, index: QModelIndex):
+    async def on_tree_view_selection_changed(self, index: QModelIndex, previous: QModelIndex):
         if not index.isValid():
             return
 
@@ -146,10 +173,10 @@ class ProjectsViewer(QMainWindow):
         node_type = item.node_type()
         if node_type == "project":
             project = cast(Project, data_obj)
-            self.tab.setTabText(0, project.topic_id)
+            self.tab_bar.setTabText(0, project.topic_id)
             await self.info_widget.load(project)
         else:
-            self.tab.setTabText(0, "???")
+            self.tab_bar.setTabText(0, "???")
             await self.info_widget.load(None)
 
     def exec(self):

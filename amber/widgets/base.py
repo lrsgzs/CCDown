@@ -8,6 +8,6 @@ class AObject(AmberObject):
     def __init__(self):
         super().__init__()
 
-    def call(self, func: Callable[[Self, TFunctionArg], None], arg: TFunctionArg) -> Self:
-        func(self, arg)
+    def call(self, func: Callable[[Self, TFunctionArg], None], *args: TFunctionArg) -> Self:
+        func(self, *args)
         return self
