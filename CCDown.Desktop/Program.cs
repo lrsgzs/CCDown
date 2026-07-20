@@ -1,5 +1,6 @@
 ﻿using System;
 using Avalonia;
+using Avalonia.Media;
 
 namespace CCDown.Desktop;
 
@@ -19,6 +20,18 @@ sealed class Program
 #if DEBUG
             .WithDeveloperTools()
 #endif
-            .WithInterFont()
+            .With(new FontManagerOptions
+            {
+                DefaultFamilyName = "avares://CCDown/Assets/Fonts/HarmonyOS_Sans_SC/#HarmonyOS Sans SC",
+                FontFallbacks =
+                [
+                    new FontFallback
+                    {
+                        FontFamily =
+                            new FontFamily(
+                                "avares://CCDown/Assets/Fonts/HarmonyOS_Sans_SC/#HarmonyOS Sans SC")
+                    }
+                ]
+            })
             .LogToTrace();
 }

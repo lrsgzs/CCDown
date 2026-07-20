@@ -3,8 +3,15 @@
              x:Class="CCDown.App"
              RequestedThemeVariant="Default">
              <!-- "Default" ThemeVariant follows system theme variant. "Dark" or "Light" are other available options. -->
-  
+    <Application.Resources>
+        <ResourceDictionary>
+            <FontFamily x:Key="AppFontFamily">avares://CCDown/Assets/Fonts/HarmonyOS_Sans_SC/#HarmonyOS Sans SC</FontFamily>
+            <StaticResource x:Key="ContentControlThemeFontFamily" ResourceKey="AppFontFamily" />
+            <FontFamily x:Key="FluentSystemIconsResizeable">avares://CCDown/Assets/Fonts/#FluentSystemIcons-Resizable</FontFamily>
+        </ResourceDictionary>
+    </Application.Resources>
+    
     <Application.Styles>
-        <FluentTheme />
+        <StyleInclude Source="./Styles.axaml" />
     </Application.Styles>
 </Application>

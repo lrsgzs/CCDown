@@ -1,9 +1,10 @@
 <Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFramework>net10.0-android</TargetFramework>
+        <TargetFramework>net10.0-android36.0</TargetFramework>
         <SupportedOSPlatformVersion>23</SupportedOSPlatformVersion>
         <Nullable>enable</Nullable>
+        <ImplicitUsings>true</ImplicitUsings>
         <ApplicationId>com.CompanyName.CCDown</ApplicationId>
         <ApplicationVersion>1</ApplicationVersion>
         <ApplicationDisplayVersion>1.0</ApplicationDisplayVersion>
@@ -25,4 +26,6 @@
     <ItemGroup>
         <ProjectReference Include="..\CCDown\CCDown.csproj"/>
     </ItemGroup>
+
+    <Import Project="..\Global.props" />
 </Project>

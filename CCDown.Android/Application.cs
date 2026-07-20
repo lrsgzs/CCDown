@@ -1,7 +1,7 @@
-﻿using Android.App;
-using Android.Runtime;
+﻿using Android.Runtime;
 using Avalonia;
 using Avalonia.Android;
+using Avalonia.Media;
 
 namespace CCDown.Android
 {
@@ -15,7 +15,19 @@ namespace CCDown.Android
         protected override AppBuilder CustomizeAppBuilder(AppBuilder builder)
         {
             return base.CustomizeAppBuilder(builder)
-                .WithInterFont();
+                .With(new FontManagerOptions
+                {
+                    DefaultFamilyName = "avares://CCDown/Assets/Fonts/HarmonyOS_Sans_SC/#HarmonyOS Sans SC",
+                    FontFallbacks =
+                    [
+                        new FontFallback
+                        {
+                            FontFamily =
+                                new FontFamily(
+                                    "avares://CCDown/Assets/Fonts/HarmonyOS_Sans_SC/#HarmonyOS Sans SC")
+                        }
+                    ]
+                });;
         }
     }
 }

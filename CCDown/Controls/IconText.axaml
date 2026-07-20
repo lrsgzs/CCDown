@@ -1,0 +1,23 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:cc="http://ccdown.lrsgzs.top/schemas/xaml/core"
+             mc:Ignorable="d" d:DesignWidth="200" d:DesignHeight="40"
+             x:Class="CCDown.Controls.IconText">
+    <StackPanel Orientation="Horizontal" Spacing="{Binding $parent[cc:IconText].Spacing, Mode=OneWay}">
+        <cc:FluentIcon Glyph="{Binding $parent[cc:IconText].Glyph, Mode=OneWay}"
+                       VerticalAlignment="Center"
+                       FontSize="16">
+            <cc:FluentIcon.IsVisible>
+                <Binding Path="$parent[cc:IconText].Glyph" Converter="{x:Static StringConverters.IsNotNullOrEmpty}" />
+            </cc:FluentIcon.IsVisible>
+        </cc:FluentIcon>
+        <TextBlock Text="{Binding $parent[cc:IconText].Text}"
+                   VerticalAlignment="Center"
+                   LineSpacing="0"
+                   x:Name="TextElement"
+                   Margin="0 0 0 -1"
+                   IsVisible="{Binding $parent[cc:IconText].Text, Converter={x:Static StringConverters.IsNotNullOrEmpty}}" />
+    </StackPanel>
+</UserControl>

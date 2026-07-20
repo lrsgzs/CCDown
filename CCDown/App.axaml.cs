@@ -3,6 +3,7 @@ using Avalonia.Controls.ApplicationLifetimes;
 using Avalonia.Data.Core;
 using Avalonia.Data.Core.Plugins;
 using System.Linq;
+using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 using CCDown.ViewModels;
 using CCDown.Views;
@@ -29,14 +30,14 @@ public partial class App : Application
         {
             singleViewFactoryApplicationLifetime.MainViewFactory = () => new PageNavigationHost()
             {
-                Page = new MainView { DataContext = new MainWindowViewModel() }
+                Page = new MainView { DataContext = new MainViewModel() }
             };
         }
         else if (ApplicationLifetime is ISingleViewApplicationLifetime singleViewPlatform)
         {
             singleViewPlatform.MainView = new PageNavigationHost()
             {
-                Page = new MainView { DataContext = new MainWindowViewModel() }
+                Page = new MainView { DataContext = new MainViewModel() }
             };
         }
 
