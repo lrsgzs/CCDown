@@ -1,8 +1,6 @@
 from PySide6.QtCore import *
 from PySide6.QtGui import *
 from PySide6.QtWidgets import *
-from qasync import asyncSlot, asyncClose
-import asyncio
 
 from amber.core import *
 from amber.widgets import *
