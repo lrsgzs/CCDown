@@ -1,0 +1,11 @@
+﻿<Solution>
+  <Project Path="CCDown.Android/CCDown.Android.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="CCDown.Browser/CCDown.Browser.csproj" />
+  <Project Path="CCDown.Desktop/CCDown.Desktop.csproj" />
+  <Project Path="CCDown.iOS/CCDown.iOS.csproj">
+    <Deploy />
+  </Project>
+  <Project Path="CCDown/CCDown.csproj" />
+</Solution>
